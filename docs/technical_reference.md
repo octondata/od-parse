@@ -5,7 +5,7 @@ This technical reference guide provides detailed information about the advanced 
 ## Table of Contents
 
 - [UnifiedPDFParser](#unifiedpdfparser)
-- [Pipeline Architecture](#pipeline-architecture)
+- [Integration with OctonData Platform](#integration-with-octondata-platform)
 - [Document Intelligence](#document-intelligence)
 - [Layout Analysis](#layout-analysis)
 - [Table Extraction](#table-extraction)
@@ -51,54 +51,46 @@ result = parser.parse("document.pdf")
 markdown = parser.to_markdown(result)
 ```
 
-## Pipeline Architecture
+## Integration with OctonData Platform
 
-The pipeline architecture allows for flexible configuration of processing stages.
+The `od-parse` library is designed to integrate seamlessly with the OctonData platform, allowing you to leverage its advanced PDF parsing capabilities within your existing data pipelines.
 
-### Available Pipeline Stages
+### Using UnifiedPDFParser in OctonData Pipelines
 
-| Stage | Description |
-|-------|-------------|
-| `LoadDocumentStage` | Loads a document from a file path |
-| `BasicParsingStage` | Performs basic PDF parsing without deep learning |
-| `AdvancedParsingStage` | Performs advanced PDF parsing with deep learning |
-| `TableExtractionStage` | Extracts tables from a document |
-| `FormExtractionStage` | Extracts form elements from a document |
-| `HandwrittenContentStage` | Extracts handwritten content from a document |
-| `DocumentStructureStage` | Extracts document structure |
-| `OutputFormattingStage` | Formats the output of the pipeline |
-
-### Pre-configured Pipelines
-
-| Pipeline | Description |
-|----------|-------------|
-| `PDFPipeline.create_full_pipeline()` | Complete pipeline with all extraction capabilities |
-| `PDFPipeline.create_fast_pipeline()` | Speed-optimized pipeline without deep learning |
-| `PDFPipeline.create_tables_pipeline()` | Pipeline focused on table extraction |
-| `PDFPipeline.create_forms_pipeline()` | Pipeline focused on form extraction |
-| `PDFPipeline.create_structure_pipeline()` | Pipeline focused on document structure extraction |
-
-### Example Usage
+The UnifiedPDFParser provides a single interface to all parsing capabilities and can be used directly in your OctonData pipelines:
 
 ```python
-from od_parse.advanced.pipeline import (
-    PDFPipeline,
-    LoadDocumentStage,
-    BasicParsingStage,
-    TableExtractionStage,
-    OutputFormattingStage
-)
+from od_parse.advanced.unified_parser import UnifiedPDFParser
 
-# Create custom pipeline
-pipeline = PDFPipeline()
-pipeline.add_stage(LoadDocumentStage())
-pipeline.add_stage(BasicParsingStage())
-pipeline.add_stage(TableExtractionStage({"use_neural": False}))
-pipeline.add_stage(OutputFormattingStage({"format": "json"}))
-
-# Process document
-result = pipeline.process("document.pdf")
+def process_pdf_document(file_path, config=None):
+    # Default configuration if none provided
+    if config is None:
+        config = {
+            "use_deep_learning": True,
+            "extract_handwritten": True,
+            "extract_tables": True,
+            "extract_forms": True,
+            "extract_structure": True
+        }
+    
+    # Initialize the parser with the configuration
+    parser = UnifiedPDFParser(config)
+    
+    # Parse the document
+    result = parser.parse(file_path)
+    
+    return result
 ```
+
+### Common Extraction Configurations
+
+| Use Case | Recommended Configuration |
+|----------|----------------------------|
+| Fast Processing | `{"use_deep_learning": False, "extract_tables": True, "extract_structure": False}` |
+| Table Extraction | `{"use_deep_learning": True, "extract_tables": True, "extract_forms": False, "extract_structure": False}` |
+| Form Processing | `{"use_deep_learning": True, "extract_forms": True, "extract_tables": False}` |
+| Document Intelligence | `{"use_deep_learning": True, "extract_structure": True, "extract_handwritten": True}` |
+| Complete Analysis | `{"use_deep_learning": True, "extract_tables": True, "extract_forms": True, "extract_structure": True, "extract_handwritten": True}` |
 
 ## Document Intelligence
 

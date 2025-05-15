@@ -68,8 +68,20 @@ from od_parse.advanced.integrations import DatabaseConnector
 import os
 
 # Process the document
-pipeline = PDFPipeline.create_full_pipeline()
-result = pipeline.process("contract.pdf")
+# Use the UnifiedPDFParser directly
+from od_parse.advanced.unified_parser import UnifiedPDFParser
+
+# Configure the parser with the desired options
+parser = UnifiedPDFParser({
+    "use_deep_learning": True,
+    "extract_handwritten": True,
+    "extract_tables": True,
+    "extract_forms": True,
+    "extract_structure": True
+})
+
+# Parse the document
+result = parser.parse("contract.pdf")
 
 # Configure connection to PostgreSQL database
 db_connector = DatabaseConnector({
@@ -86,13 +98,19 @@ db_connector.export(result)
 The `od-parse` library can be used with external APIs for further processing or storage.
 
 ```python
-from od_parse.advanced.pipeline import PDFPipeline
+from od_parse.advanced.unified_parser import UnifiedPDFParser
 from od_parse.advanced.integrations import APIConnector
 import os
 
+# Configure and use the parser
+parser = UnifiedPDFParser({
+    "use_deep_learning": True,
+    "extract_handwritten": True,
+    "extract_tables": True
+})
+
 # Process the document
-pipeline = PDFPipeline.create_full_pipeline()
-result = pipeline.process("medical_report.pdf")
+result = parser.parse("medical_report.pdf")
 
 # Configure connection to API
 api_connector = APIConnector({
