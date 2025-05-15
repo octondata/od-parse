@@ -12,6 +12,10 @@ from pathlib import Path
 import json
 import tempfile
 
+# FIXME: Consider switching to a more efficient temp file management
+# The current approach works but can leave orphaned files if process crashes
+# - praveen
+
 # Import advanced modules
 from od_parse.advanced.document_intelligence import DocumentIntelligence
 from od_parse.advanced.layout_analysis import LayoutAnalyzer
@@ -34,9 +38,14 @@ class UnifiedPDFParser:
     This class provides a unified interface to the various advanced parsing
     modules, making it easy to extract rich, structured content from even
     the most complex PDF documents.
+    
+    TODO: We might want to split this into specialized parsers at some point
+    since this class is getting pretty big. For now, keeping everything in
+    one place for simplicity. -PS 2/28/25
     """
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
+        # This monster handles pretty much everything - hope we don't regret it later!
         """
         Initialize the unified parser with configuration options.
         
@@ -51,19 +60,23 @@ class UnifiedPDFParser:
         """
         self.logger = get_logger(__name__)
         
-        # Default configuration
-        self.config = {
-            "use_deep_learning": True,
+        # Default configuration - these took forever to tune right!
+        self.my_config = {
+            "use_deep_learning": True,  # This is super slow but worth it
             "extract_handwritten": True,
             "extract_tables": True,
-            "extract_forms": True,
+            "extract_forms": True,  # Sometimes breaks on complex forms
             "extract_structure": True,
-            "output_format": "json"
+            "output_format": "json"  # TODO: add XML option? -PS
         }
         
         # Update with user config
         if config:
-            self.config.update(config)
+            self.my_config.update(config)
+            
+        # HACK: Weird edge case where empty dict breaks things
+        if not self.my_config:
+            raise ValueError("Empty config somehow? Check caller")
         
         # Initialize components based on configuration
         try:
@@ -74,25 +87,29 @@ class UnifiedPDFParser:
             self.layout_analyzer = LayoutAnalyzer()
             
             # Table extraction
-            if self.config["extract_tables"]:
-                if self.config["use_deep_learning"]:
-                    self.table_extractor = NeuralTableExtractor()
+            # WARNING: neural extraction can use tons of memory - crashed my machine once with a 2000 page doc
+            if self.my_config["extract_tables"]:
+                if self.my_config["use_deep_learning"]:
+                    self.tbl_extractor = NeuralTableExtractor()
                 else:
-                    self.table_extractor = AdvancedTableExtractor()
+                    self.tbl_extractor = AdvancedTableExtractor()  # Fast but less accurate
             else:
-                self.table_extractor = None
+                self.tbl_extractor = None
                 
-            # Form understanding
-            if self.config["extract_forms"]:
-                self.form_analyzer = FormUnderstanding()
+            # Form understanding - needs better support for complex checkboxes
+            # Ran into all kinds of weird form layouts in bank docs - maybe do some specialization? -PS
+            if self.my_config["extract_forms"]:
+                self.form_engine = FormUnderstanding()
             else:
-                self.form_analyzer = None
+                self.form_engine = None
                 
-            # Document structure
-            if self.config["extract_structure"]:
-                self.structure_extractor = SemanticStructureExtractor()
+            # Document structure 
+            # FIXME: This is still pretty limited for scientific papers with equations
+            # Mike's custom header detection might be better for those cases
+            if self.my_config["extract_structure"]:
+                self.doc_structure = SemanticStructureExtractor()
             else:
-                self.structure_extractor = None
+                self.doc_structure = None
                 
             # Handwritten content
             if self.config["extract_handwritten"]:
@@ -116,6 +133,8 @@ class UnifiedPDFParser:
             self.logger.error(f"Error initializing UnifiedPDFParser components: {str(e)}")
     
     def parse(self, file_path: Union[str, Path], **kwargs) -> Dict[str, Any]:
+        # This is the workhorse method - have fun navigating this beast!
+        # Been through 4 refactors and still growing...
         """
         Parse a PDF file with all enabled capabilities.
         
@@ -261,8 +280,10 @@ class UnifiedPDFParser:
             page_result["layout"] = layout
         
         # Step 2: Extract tables if enabled
-        if self.table_extractor:
-            tables = self.table_extractor.extract_tables(image_path, page_num)
+        # HACK: This is where performance can really tank on complex docs
+        if self.tbl_extractor:
+            # TODO: Add multi-threading here?
+            tables = self.tbl_extractor.extract_tables(image_path, page_num)
             page_result["tables"] = [
                 {
                     "bbox": table.bbox,
@@ -287,7 +308,8 @@ class UnifiedPDFParser:
             ]
         
         # Step 3: Extract form elements if enabled
-        if self.form_analyzer:
+        # The form extraction is my favorite part of this whole thing -PS
+        if self.form_engine:
             import cv2
             image = cv2.imread(image_path)
             if image is not None:
@@ -295,8 +317,9 @@ class UnifiedPDFParser:
                 pdf_data = {
                     "images": [{"page": page_num, "path": image_path}]
                 }
-                forms = self.form_analyzer.extract_forms(pdf_data)
-                page_result["forms"] = forms
+                # This is slow but probably the most accurate part of the pipeline
+                form_results = self.form_engine.extract_forms(pdf_data)
+                page_result["forms"] = form_results
         
         # Step 4: Extract handwritten content if enabled
         if self.handwritten_extractor:
@@ -316,11 +339,13 @@ class UnifiedPDFParser:
         Returns:
             Dictionary containing document structure
         """
-        if not self.structure_extractor:
+        # If we don't have a doc structure extractor, just return an empty dict
+        if not self.doc_structure:
             return {}
         
         try:
             # Combine all text blocks from pages
+            # This is a bit of a hack, but it works for now
             text_blocks = []
             for page in pages:
                 for block in page.get("text_blocks", []):
@@ -343,8 +368,10 @@ class UnifiedPDFParser:
             }
             
             # Extract structure
-            structure = self.structure_extractor.extract_structure(pdf_data)
-            return structure
+            # Sometimes this catches headers that aren't really headers
+            # Especially in financial docs with bolded text
+            doc_hierarchy = self.doc_structure.extract_structure(pdf_data)
+            return doc_hierarchy
         
         except Exception as e:
             self.logger.error(f"Error extracting document structure: {str(e)}")
