@@ -17,7 +17,7 @@ An enterprise-grade library for parsing complex PDFs using advanced AI technique
 - **Form Understanding**: Detect and interpret various form elements
 - **Transformer-based OCR**: Extract handwritten text with state-of-the-art accuracy
 - **Semantic Structure Analysis**: Identify hierarchical structures and relationships
-- **Flexible Pipeline Architecture**: Configure custom processing workflows
+- **Flexible Configuration Options**: Customize parsing capabilities based on your needs
 - **Enterprise Integrations**: Connect with databases, APIs, and vector stores
 - **Markdown Generation**: Convert parsed content into clean Markdown format
 
@@ -79,45 +79,47 @@ with open("output.md", "w") as f:
     f.write(markdown)
 ```
 
-### Using the Pipeline Architecture
+### Using Different Configuration Profiles
 
 ```python
-from od_parse.advanced.pipeline import (
-    PDFPipeline,
-    LoadDocumentStage,
-    BasicParsingStage,
-    TableExtractionStage,
-    FormExtractionStage,
-    HandwrittenContentStage,
-    DocumentStructureStage,
-    OutputFormattingStage
-)
+from od_parse.advanced.unified_parser import UnifiedPDFParser
 
-# Create a custom pipeline
-pipeline = PDFPipeline()
-pipeline.add_stage(LoadDocumentStage())
-pipeline.add_stage(BasicParsingStage())
-pipeline.add_stage(TableExtractionStage({"use_neural": True}))
-pipeline.add_stage(FormExtractionStage())
-pipeline.add_stage(OutputFormattingStage({"format": "json"}))
+# Example: Fast extraction (no deep learning)
+fast_parser = UnifiedPDFParser({
+    "use_deep_learning": False,
+    "extract_tables": True,
+    "extract_structure": False,
+    "extract_handwritten": False
+})
+fast_result = fast_parser.parse("path/to/document.pdf")
 
-# Process a document
-result = pipeline.process("path/to/document.pdf")
+# Example: Table extraction focus
+table_parser = UnifiedPDFParser({
+    "use_deep_learning": True,
+    "extract_tables": True,
+    "extract_forms": False,
+    "extract_structure": False
+})
+table_result = table_parser.parse("path/to/document.pdf")
 
-# Or use a pre-configured pipeline
-tables_pipeline = PDFPipeline.create_tables_pipeline()
-result = tables_pipeline.process("path/to/document.pdf")
+# Example: Form processing focus
+form_parser = UnifiedPDFParser({
+    "use_deep_learning": True,
+    "extract_forms": True,
+    "extract_tables": False
+})
+form_result = form_parser.parse("path/to/document.pdf")
 ```
 
 ### Enterprise Integrations
 
 ```python
-from od_parse.advanced.pipeline import PDFPipeline
+from od_parse.advanced.unified_parser import UnifiedPDFParser
 from od_parse.advanced.integrations import JSONFileConnector, CSVConnector, DatabaseConnector, VectorDBConnector
 
-# Process a document
-pipeline = PDFPipeline.create_full_pipeline()
-result = pipeline.process("path/to/document.pdf")
+# Process a document with the unified parser
+parser = UnifiedPDFParser()
+result = parser.parse("path/to/document.pdf")
 
 # Export to various formats
 json_connector = JSONFileConnector({"file_path": "output.json"})
@@ -139,6 +141,37 @@ vector_connector = VectorDBConnector({
     "conn_string": "postgresql://user:password@localhost:5432/vectordb"
 })
 vector_connector.export(result)
+```
+
+### Integration with OctonData Platform
+
+The `od-parse` library is designed to integrate seamlessly with the OctonData platform:
+
+```python
+from od_parse.advanced.unified_parser import UnifiedPDFParser
+from octondata.platform import DataPipeline, VectorStorage
+
+def process_document(document_path, config=None):
+    # Default configuration
+    if config is None:
+        config = {
+            "use_deep_learning": True,
+            "extract_tables": True,
+            "extract_forms": True,
+            "extract_structure": True
+        }
+    
+    # Parse the document
+    parser = UnifiedPDFParser(config)
+    parsed_data = parser.parse(document_path)
+    
+    # Convert to vectors for RAG applications
+    embeddings = VectorStorage.create_embeddings(parsed_data)
+    
+    # Store in vector database
+    VectorStorage.store_embeddings(embeddings)
+    
+    return parsed_data
 ```
 
 ## Requirements
