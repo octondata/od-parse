@@ -143,16 +143,16 @@ vector_connector = VectorDBConnector({
 vector_connector.export(result)
 ```
 
-### Integration with OctonData Platform
+### Configurable Vector Storage for RAG Applications
 
-The `od-parse` library is designed to integrate seamlessly with the OctonData platform:
+The `od-parse` library provides a flexible vector storage system that supports various embedding models and vector databases:
 
 ```python
 from od_parse.advanced.unified_parser import UnifiedPDFParser
-from octondata.platform import DataPipeline, VectorStorage
+from od_parse.advanced.vector_storage import VectorStorage
 
 def process_document(document_path, config=None):
-    # Default configuration
+    # Default configuration for the parser
     if config is None:
         config = {
             "use_deep_learning": True,
@@ -165,13 +165,57 @@ def process_document(document_path, config=None):
     parser = UnifiedPDFParser(config)
     parsed_data = parser.parse(document_path)
     
-    # Convert to vectors for RAG applications
-    embeddings = VectorStorage.create_embeddings(parsed_data)
+    # Configure vector storage with your preferred embedding model and database
+    vector_storage = VectorStorage({
+        # Embedding model configuration
+        "embedding_model": "openai",  # Options: openai, huggingface, cohere, custom
+        "embedding_model_name": "text-embedding-3-small",
+        "api_key": "your-api-key",  # Or use environment variable
+        
+        # Vector database configuration
+        "vector_db": "pgvector",  # Options: pgvector, qdrant, pinecone, milvus, weaviate, chroma, json
+        "connection_string": "postgresql://user:password@localhost:5432/vectordb",
+        
+        # Chunking configuration
+        "chunk_size": 1000,
+        "chunk_overlap": 100
+    })
     
-    # Store in vector database
-    VectorStorage.store_embeddings(embeddings)
+    # Create embeddings from parsed data
+    embeddings = vector_storage.create_embeddings(parsed_data)
+    
+    # Store embeddings in the configured vector database
+    vector_storage.store_embeddings(embeddings)
     
     return parsed_data
+```
+
+#### Using Custom Embedding Models
+
+You can also use your own custom embedding models:
+
+```python
+# Create a custom embedding implementation
+class MyEmbeddingModel:
+    def __init__(self, model_path, **kwargs):
+        # Load your model here
+        self.model = load_my_model(model_path)
+    
+    def embed(self, text):
+        # Generate embeddings using your model
+        return self.model.generate_embedding(text)
+
+# Save this to my_embeddings.py
+
+# Then use it with VectorStorage
+vector_storage = VectorStorage({
+    "embedding_model": "custom",
+    "custom_embedding_module": "/path/to/my_embeddings.py",
+    "custom_embedding_class": "MyEmbeddingModel",
+    "custom_embedding_params": {
+        "model_path": "/path/to/my/model"
+    }
+})
 ```
 
 ## Requirements
