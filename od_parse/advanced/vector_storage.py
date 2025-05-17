@@ -13,6 +13,7 @@ import importlib.util
 from pathlib import Path
 
 from od_parse.utils.logging_utils import get_logger
+from od_parse.config.settings import get_config, load_config
 
 
 class VectorStorage:
@@ -42,13 +43,30 @@ class VectorStorage:
         self.logger = get_logger(__name__)
         self.config = config or {}
         
+        # Load configuration if not already loaded
+        if not get_config():
+            load_config()
+            
         # Set default configuration values
-        self.embedding_model = self.config.get("embedding_model", "openai")
-        self.embedding_model_name = self.config.get("embedding_model_name", "text-embedding-3-small")
-        self.embedding_dimension = self.config.get("embedding_dimension", 1536)
+        embedding_provider = self.config.get("embedding_model", "openai")
+        self.embedding_model = embedding_provider
+        self.embedding_model_name = self.config.get(
+            "embedding_model_name", 
+            get_config(f"embedding_models.{embedding_provider}")
+        )
+        self.embedding_dimension = self.config.get(
+            "embedding_dimension", 
+            get_config(f"vector_db.pgvector.default_dimension")
+        )
         self.chunk_size = self.config.get("chunk_size", 1000)
         self.chunk_overlap = self.config.get("chunk_overlap", 100)
-        self.api_key = self.config.get("api_key", os.environ.get("OPENAI_API_KEY"))
+        
+        # Get API key from config, with fallbacks
+        self.api_key = self.config.get(
+            "api_key",
+            get_config(f"api_keys.{embedding_provider}") or os.environ.get(f"{embedding_provider.upper()}_API_KEY")
+        )
+        
         self.vector_db = self.config.get("vector_db", "pgvector")
         self.connection_string = self.config.get("connection_string", "")
         

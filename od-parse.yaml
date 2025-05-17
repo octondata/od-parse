@@ -1,0 +1,57 @@
+# od-parse Configuration File
+
+# API keys (IMPORTANT: For security, use environment variables instead of storing keys here)
+# Uncomment and replace with your actual keys if needed
+api_keys:
+  # openai: "your-openai-api-key"  # Or set OPENAI_API_KEY environment variable
+  # anthropic: "your-anthropic-api-key"  # Or set ANTHROPIC_API_KEY environment variable
+  # cohere: "your-cohere-api-key"  # Or set COHERE_API_KEY environment variable
+  # huggingface: "your-huggingface-api-key"  # Or set HUGGINGFACE_API_KEY environment variable
+  # google: "your-google-api-key"  # Or set GOOGLE_API_KEY environment variable
+
+# API endpoints
+api_endpoints:
+  openai: https://api.openai.com/v1
+  anthropic: https://api.anthropic.com
+  cohere: https://api.cohere.ai/v1
+  huggingface: https://api-inference.huggingface.co/models
+  google: https://generativelanguage.googleapis.com/v1
+
+# VLM models
+vlm_models:
+  qwen: qwen2.5-vl
+  claude: claude-3-opus-vision
+  gemini: gemini-pro-vision
+
+# Embedding models
+embedding_models:
+  openai: text-embedding-3-small
+  cohere: embed-english-v3.0
+  huggingface: sentence-transformers/all-mpnet-base-v2
+
+# Vector database configuration
+vector_db:
+  pgvector:
+    default_dimension: 1536
+  qdrant:
+    default_host: localhost
+    default_port: 6333
+  chroma:
+    default_path: ./chroma_db
+
+# System prompts
+system_prompts:
+  document_analysis: >
+    You are an expert document analyzer. Analyze the document image and extract all relevant information.
+    Focus on understanding the document structure, identifying tables, forms, and key information.
+    Provide a detailed analysis of what you see in the document.
+  
+  table_extraction: >
+    Focus only on tables in this document. For each table, extract all cells with their data,
+    preserve the table structure, and include headers if present.
+    Format each table as a JSON object with 'headers' and 'data' properties.
+  
+  form_extraction: >
+    Focus only on form fields in this document. For each form field, identify the field label/name,
+    extract the field value, and determine the field type (text, checkbox, radio button, etc.).
+    Format your response as a JSON object with field names as keys.

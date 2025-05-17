@@ -2,6 +2,7 @@
 
 An enterprise-grade library for parsing complex PDFs using advanced AI techniques. This library is designed to handle all types of PDF content with state-of-the-art accuracy, including:
 
+- Vision Language Models (VLMs) like Qwen 2.5 VL for enhanced document understanding
 - Deep learning-based text extraction and layout analysis
 - Transformer-based OCR for handwritten content
 - Neural table detection and extraction
@@ -11,6 +12,7 @@ An enterprise-grade library for parsing complex PDFs using advanced AI technique
 
 ## Features
 
+- **Vision Language Models (VLMs)**: Leverage state-of-the-art VLMs like Qwen 2.5 VL for enhanced document understanding
 - **Advanced Document Intelligence**: Understand document structure and content relationships
 - **Neural Layout Analysis**: Detect complex layouts, including multi-column structures
 - **Deep Learning Table Extraction**: Extract tables even without explicit borders
@@ -218,6 +220,58 @@ vector_storage = VectorStorage({
 })
 ```
 
+### Using Vision Language Models (VLMs)
+
+The library now supports Vision Language Models like Qwen 2.5 VL to enhance document understanding by leveraging both visual and textual information:
+
+```python
+from od_parse.advanced.unified_parser import UnifiedPDFParser
+from od_parse.advanced.vlm_processor import VLMProcessor
+
+# Initialize the VLM processor with Qwen 2.5 VL
+vlm_processor = VLMProcessor({
+    "model": "qwen2.5-vl",  # Options: qwen2.5-vl, claude-3-opus-vision, gemini-pro-vision
+    "api_key": "your-api-key",  # Or use environment variable
+    "max_tokens": 2048,
+    "temperature": 0.2,
+    "system_prompt": "You are an expert document analyzer. Extract all information from this document."
+})
+
+# Parse a document with traditional methods first
+parser = UnifiedPDFParser({"extract_tables": True, "extract_forms": True})
+parsed_data = parser.parse("path/to/document.pdf")
+
+# Convert the PDF to images for VLM processing
+from pdf2image import convert_from_path
+images = convert_from_path("path/to/document.pdf")
+first_page_image = images[0]
+first_page_image.save("first_page.png")
+
+# Enhance parsing results with VLM analysis
+enhanced_data = vlm_processor.enhance_parsing_results(parsed_data, "first_page.png")
+
+# Extract tables specifically using VLM
+tables = vlm_processor.extract_tables_with_vlm("first_page.png")
+
+# Extract form fields using VLM
+form_fields = vlm_processor.extract_form_fields_with_vlm("first_page.png")
+
+# Process a document image directly with a custom prompt
+vlm_analysis = vlm_processor.process_document_image(
+    "first_page.png",
+    "Analyze this document and identify any handwritten notes, signatures, or annotations."
+)
+print(vlm_analysis["analysis"])
+```
+
+#### Benefits of Using VLMs
+
+- **Superior handling of complex layouts**: VLMs can understand document structure visually
+- **Better extraction of handwritten content**: VLMs excel at recognizing handwriting
+- **Improved table extraction**: VLMs can understand tables even with complex formatting
+- **Form field detection**: VLMs can identify form fields and their values more accurately
+- **Context-aware understanding**: VLMs consider both the visual layout and textual content
+
 ## Requirements
 
 - Python 3.8+
@@ -237,6 +291,131 @@ vector_storage = VectorStorage({
   - psycopg2-binary
   - sqlalchemy
   - requests
+
+- VLM Dependencies (optional):
+  - openai (for Qwen 2.5 VL)
+  - anthropic (for Claude 3 Vision)
+  - google-generativeai (for Gemini Pro Vision)
+  - sentence-transformers (for local embedding models)
+
+## Configuration System
+
+The `od-parse` library now uses a flexible configuration system that allows you to customize all settings, including API endpoints, model names, and system prompts, without modifying the code:
+
+### Configuration Files
+
+You can create a configuration file in YAML or JSON format. The library will look for configuration files in the following locations:
+
+1. Path specified when calling `load_config()`
+2. `~/.config/od-parse/config.yaml` or `~/.config/od-parse/config.json`
+3. `./od-parse.yaml` or `./od-parse.json` in the current working directory
+
+Example configuration file (YAML):
+
+```yaml
+# API keys (IMPORTANT: For security, use environment variables instead of storing keys here)
+# Uncomment and replace with your actual keys if needed
+api_keys:
+  # openai: "your-openai-api-key"  # Or set OPENAI_API_KEY environment variable
+  # anthropic: "your-anthropic-api-key"  # Or set ANTHROPIC_API_KEY environment variable
+  # cohere: "your-cohere-api-key"  # Or set COHERE_API_KEY environment variable
+  # huggingface: "your-huggingface-api-key"  # Or set HUGGINGFACE_API_KEY environment variable
+  # google: "your-google-api-key"  # Or set GOOGLE_API_KEY environment variable
+
+# API endpoints
+api_endpoints:
+  openai: https://api.openai.com/v1
+  anthropic: https://api.anthropic.com
+  cohere: https://api.cohere.ai/v1
+
+# VLM models
+vlm_models:
+  qwen: qwen2.5-vl
+  claude: claude-3-opus-vision
+  gemini: gemini-pro-vision
+
+# Embedding models
+embedding_models:
+  openai: text-embedding-3-small
+  cohere: embed-english-v3.0
+  huggingface: sentence-transformers/all-mpnet-base-v2
+
+# System prompts
+system_prompts:
+  document_analysis: >
+    You are an expert document analyzer. Analyze the document image and extract all relevant information.
+```
+
+### API Keys Configuration
+
+There are three ways to configure API keys for embedding models, VLMs, and other services:
+
+1. **Using environment variables (recommended for security)**:
+
+   ```bash
+   # Standard API keys (recommended)
+   export OPENAI_API_KEY="your-openai-api-key"
+   export ANTHROPIC_API_KEY="your-anthropic-api-key"
+   export COHERE_API_KEY="your-cohere-api-key"
+   export HUGGINGFACE_API_KEY="your-huggingface-api-key"
+   export GOOGLE_API_KEY="your-google-api-key"
+   
+   # Library-specific API keys (alternative)
+   export OD_PARSE_OPENAI_API_KEY="your-openai-api-key"
+   export OD_PARSE_ANTHROPIC_API_KEY="your-anthropic-api-key"
+   ```
+
+2. **In the configuration file** (less secure, but convenient for development):
+
+   ```yaml
+   # In od-parse.yaml or ~/.config/od-parse/config.yaml
+   api_keys:
+     openai: "your-openai-api-key"
+     anthropic: "your-anthropic-api-key"
+     cohere: "your-cohere-api-key"
+   ```
+
+3. **Directly in code** when initializing components:
+
+   ```python
+   vector_storage = VectorStorage({
+       "embedding_model": "openai",
+       "api_key": "your-openai-api-key"  # Takes precedence over config files and env vars
+   })
+   ```
+
+### Other Environment Variables
+
+You can also configure other settings using environment variables:
+
+```bash
+# API endpoints
+export OD_PARSE_OPENAI_API_URL="https://api.openai.com/v1"
+export OD_PARSE_ANTHROPIC_API_URL="https://api.anthropic.com"
+
+# VLM models
+export OD_PARSE_QWEN_MODEL="qwen2.5-vl"
+export OD_PARSE_CLAUDE_MODEL="claude-3-opus-vision"
+
+# Embedding models
+export OD_PARSE_OPENAI_EMBEDDING_MODEL="text-embedding-3-small"
+```
+
+### Using the Configuration System in Code
+
+```python
+from od_parse.config.settings import load_config, get_config
+
+# Load configuration from file
+load_config("/path/to/config.yaml")
+
+# Get configuration values
+api_endpoint = get_config("api_endpoints.openai")
+qwen_model = get_config("vlm_models.qwen")
+
+# Get nested configuration with default value
+chroma_path = get_config("vector_db.chroma.default_path", "./default_chroma_db")
+```
 
 ## Command Line Interface
 
