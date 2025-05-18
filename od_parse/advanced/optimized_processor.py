@@ -5,22 +5,19 @@ This module provides memory-efficient and CPU-efficient approaches to process
 large documents while maintaining a small resource footprint.
 """
 
-import os
-import logging
-import tempfile
-from typing import Dict, List, Any, Optional, Union, Iterator, Tuple
-from pathlib import Path
 import gc
 import mmap
-import threading
+import os
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
-from functools import partial
+from pathlib import Path
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 import numpy as np
 from PIL import Image
 
-from od_parse.utils.logging_utils import get_logger
 from od_parse.config.settings import get_config, load_config
+from od_parse.utils.logging_utils import get_logger
 
 
 class OptimizedProcessor:
@@ -45,9 +42,24 @@ class OptimizedProcessor:
                 - image_dpi: DPI for image conversion (default: 150)
                 - image_quality: JPEG quality for image conversion (default: 85)
                 - max_image_dimension: Maximum dimension for images (default: 1500)
+                
+        Raises:
+            ConfigurationError: If the configuration is invalid
+            ResourceError: If required system resources are not available
         """
-        self.logger = get_logger(__name__)
-        self.config = config or {}
+        try:
+            self.logger = get_logger(__name__)
+            self._validate_config(config or {})
+            self.config = config or {}
+            
+            # Load configuration if not already loaded
+            if not get_config():
+                load_config()
+                
+        except Exception as e:
+            if isinstance(e, ConfigurationError):
+                raise
+            raise ConfigurationError(f"Initialization failed: {str(e)}")
         
         # Load configuration if not already loaded
         if not get_config():
@@ -96,29 +108,120 @@ class OptimizedProcessor:
         # Force garbage collection
         gc.collect()
     
+    def _validate_config(self, config: Dict[str, Any]) -> None:
+        """Validate configuration settings."""
+        try:
+            # Validate batch size
+            batch_size = config.get('batch_size', 5)
+            if batch_size < 1:
+                raise ConfigurationError("batch_size must be greater than 0")
+                
+            # Validate worker count
+            max_workers = config.get('max_workers', 2)
+            if max_workers < 1:
+                raise ConfigurationError("max_workers must be greater than 0")
+                
+            # Validate image settings
+            image_dpi = config.get('image_dpi', 150)
+            if image_dpi < 72:
+                raise ConfigurationError("image_dpi must be at least 72")
+                
+            image_quality = config.get('image_quality', 85)
+            if not 1 <= image_quality <= 100:
+                raise ConfigurationError("image_quality must be between 1 and 100")
+                
+            # Validate temp directory
+            temp_dir = config.get('temp_dir')
+            if temp_dir and not Path(temp_dir).exists():
+                raise ConfigurationError(f"Temp directory does not exist: {temp_dir}")
+                
+        except Exception as e:
+            if not isinstance(e, ConfigurationError):
+                raise ConfigurationError(f"Invalid configuration: {str(e)}")
+            raise
+
+    def process_document(self, file_path: Union[str, Path],
+                         progress_callback: Optional[Callable[[float], None]] = None) -> Dict[str, Any]:
+        """Process a document with the configured settings.
+        
+        Args:
+            file_path: Path to the document file
+            progress_callback: Optional callback for progress updates
+            
+        Returns:
+            Dict containing the processed document data
+            
+        Raises:
+            FileNotFoundError: If the file does not exist
+            FileTypeError: If the file type is not supported
+            FileCorruptedError: If the file is corrupted
+            ProcessingError: If processing fails
+            MemoryError: If there's not enough memory
+            OCRError: If OCR processing fails
+            TableExtractionError: If table extraction fails
+        """
+        try:
+            file_path = Path(file_path)
+            if not file_path.exists():
+                raise FileNotFoundError(f"File not found: {file_path}")
+                
+            if file_path.suffix.lower() not in ['.pdf', '.jpg', '.jpeg', '.png', '.tiff']:
+                raise FileTypeError(f"Unsupported file type: {file_path.suffix}")
+                
+            self.logger.info(f"Processing document: {file_path}")
+            try:
+                # Process the document
+                result = self.process_large_pdf(file_path)
+                return result
+            except Exception as e:
+                if isinstance(e, (FileNotFoundError, FileTypeError, FileCorruptedError, ProcessingError, MemoryError, OCRError, TableExtractionError)):
+                    raise
+                raise ProcessingError(f"Document processing failed: {str(e)}") from e
+            
+        except Exception as e:
+            if isinstance(e, (FileNotFoundError, FileTypeError, FileCorruptedError, ProcessingError, MemoryError, OCRError, TableExtractionError)):
+                raise
+            raise ProcessingError(f"Document processing failed: {str(e)}")
+
     def process_large_pdf(self, pdf_path: Union[str, Path], 
-                          processor_func: callable, 
+                          processor_func: callable = None, 
                           **processor_kwargs) -> Dict[str, Any]:
         """
         Process a large PDF document with minimal memory usage.
         
         Args:
             pdf_path: Path to the PDF file
-            processor_func: Function to process each batch of pages
-            **processor_kwargs: Additional arguments for the processor function
+            processor_func: Optional function to process each page
+            **processor_kwargs: Additional arguments for processor_func
             
         Returns:
-            Dictionary containing the combined processing results
+            Dictionary containing processed results
+            
+        Raises:
+            FileNotFoundError: If the PDF file doesn't exist
+            FileCorruptedError: If the PDF is corrupted
+            ProcessingError: If processing fails
+            MemoryError: If there's not enough memory
         """
         try:
             # Import libraries here to avoid loading them if not needed
             import fitz  # PyMuPDF
             from pdf2image import convert_from_path
-        except ImportError:
-            self.logger.error("Required libraries not installed. Please install with: pip install pymupdf pdf2image")
-            return {"error": "Required libraries not installed"}
-        
+        except ImportError as e:
+            raise ProcessingError("Required libraries not installed. Please install with: pip install pymupdf pdf2image") from e
+            
         try:
+            # Convert to Path object and validate
+            pdf_path = Path(pdf_path)
+            if not pdf_path.exists():
+                raise FileNotFoundError(f"PDF file not found: {pdf_path}")
+                
+            # Create temp directory
+            try:
+                temp_dir = tempfile.mkdtemp()
+            except Exception as e:
+                raise ProcessingError(f"Failed to create temp directory: {str(e)}")
+                
             # Open the PDF document with PyMuPDF
             doc = fitz.open(pdf_path)
             total_pages = len(doc)
@@ -142,7 +245,7 @@ class OptimizedProcessor:
                 
                 # Process batch
                 batch_result = self._process_page_batch(
-                    pdf_path, batch_start, batch_end, processor_func, **processor_kwargs
+                    pdf_path, batch_start, batch_end, temp_dir, processor_func, **processor_kwargs
                 )
                 
                 # Merge batch results
@@ -160,20 +263,41 @@ class OptimizedProcessor:
         except Exception as e:
             self.logger.error(f"Error processing large PDF: {str(e)}")
             return {"error": str(e)}
-    
+
     def _process_page_batch(self, pdf_path: Union[str, Path], 
                            start_page: int, 
                            end_page: int,
+                           temp_dir: str,
                            processor_func: callable,
                            **processor_kwargs) -> Dict[str, Any]:
-        """Process a batch of pages from the PDF."""
+        """Process a batch of pages from the PDF.
+        
+        Args:
+            pdf_path: Path to the PDF file
+            start_page: Starting page number
+            end_page: Ending page number
+            temp_dir: Directory for temporary files
+            processor_func: Function to process each page
+            **processor_kwargs: Additional arguments for processor_func
+            
+        Returns:
+            Dictionary containing processed results
+            
+        Raises:
+            ProcessingError: If batch processing fails
+            MemoryError: If there's not enough memory
+        """
         try:
             # Convert pages to images using pdf2image
             # This is more memory efficient than processing the PDF directly
             from pdf2image import convert_from_path
+        except ImportError as e:
+            raise ProcessingError("pdf2image not installed. Please install with: pip install pdf2image") from e
+            
+        try:
             
             # Create temporary directory for this batch
-            batch_temp_dir = os.path.join(self.temp_dir, f"batch_{start_page}_{end_page}")
+            batch_temp_dir = os.path.join(temp_dir, f"batch_{start_page}_{end_page}")
             os.makedirs(batch_temp_dir, exist_ok=True)
             
             # Convert pages to images with memory optimization
@@ -241,45 +365,98 @@ class OptimizedProcessor:
         except Exception as e:
             self.logger.error(f"Error processing page batch {start_page}-{end_page}: {str(e)}")
             return {"error": str(e)}
-    
-    def _process_single_page(self, image_path: str, 
-                            page_num: int,
-                            processor_func: callable,
-                            **processor_kwargs) -> Dict[str, Any]:
-        """Process a single page image."""
+
+    def _process_single_page(self, image_path: str, page_num: int, processor_func: callable, **processor_kwargs) -> Dict[str, Any]:
+        """Process a single page.
+        
+        Args:
+            image_path: Path to the page image
+            page_num: Page number
+            processor_func: Function to process the page
+            **processor_kwargs: Additional arguments for processor_func
+            
+        Returns:
+            Dictionary containing processed results
+            
+        Raises:
+            ProcessingError: If page processing fails
+            OCRError: If OCR fails
+            MemoryError: If there's not enough memory
+        """
         try:
-            # Open the image with PIL
+            if not os.path.exists(image_path):
+                raise FileNotFoundError(f"Image file not found: {image_path}")
+                
+            # Open and process the image
             with Image.open(image_path) as img:
                 # Resize image if needed to reduce memory usage
                 if max(img.width, img.height) > self.max_image_dimension:
                     scale = self.max_image_dimension / max(img.width, img.height)
-                    new_width = int(img.width * scale)
-                    new_height = int(img.height * scale)
-                    img = img.resize((new_width, new_height), Image.LANCZOS)
+                    new_size = tuple(int(dim * scale) for dim in (img.width, img.height))
+                    img = img.resize(new_size, Image.LANCZOS)
+                    
+                # Convert to numpy array for processing
+                img_array = np.array(img)
                 
                 # Process the image
-                result = processor_func(img, page_num=page_num, **processor_kwargs)
-                
-                # Add page number to result
+                if processor_func:
+                    result = processor_func(img_array, **processor_kwargs)
+                else:
+                    result = self._default_processor(img_array)
+                    
+                # Add page metadata
                 if isinstance(result, dict):
                     if "metadata" not in result:
                         result["metadata"] = {}
                     result["metadata"]["page_num"] = page_num
-                
+                    
                 return result
-        
+                    
+        except FileNotFoundError:
+            raise
+        except MemoryError:
+            raise
         except Exception as e:
             self.logger.error(f"Error processing page {page_num}: {str(e)}")
-            return {"error": str(e), "page_num": page_num}
-    
+            raise ProcessingError(f"Failed to process image: {str(e)}") from e
+
     def _combine_page_results(self, page_results: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Combine results from multiple pages."""
-        combined = {
-            "content": [],
-            "tables": [],
-            "forms": [],
-            "images": []
-        }
+        """Combine results from multiple pages.
+        
+        Args:
+            page_results: List of results from individual pages
+            
+        Returns:
+            Combined results dictionary
+            
+        Raises:
+            ProcessingError: If combining results fails
+        """
+        try:
+            if not page_results:
+                raise ProcessingError("No page results to combine")
+                
+            combined = {
+                "content": [],
+                "tables": [],
+                "forms": [],
+                "images": []
+            }
+        except Exception as e:
+            raise ProcessingError(f"Failed to initialize combined results: {str(e)}") from e
+            
+        try:
+            for result in page_results:
+                if not isinstance(result, dict):
+                    continue
+                    
+                # Merge the results
+                self._merge_results(combined, result)
+                
+            return combined
+            
+        except Exception as e:
+            raise ProcessingError(f"Failed to combine page results: {str(e)}") from e
         
         for result in page_results:
             if not isinstance(result, dict):
@@ -331,7 +508,7 @@ class OptimizedProcessor:
             if "images" not in target:
                 target["images"] = []
             target["images"].extend(source["images"])
-    
+
     def stream_large_pdf_text(self, pdf_path: Union[str, Path]) -> Iterator[Tuple[int, str]]:
         """
         Stream text from a large PDF document with minimal memory usage.
@@ -339,16 +516,26 @@ class OptimizedProcessor:
         Args:
             pdf_path: Path to the PDF file
             
-        Yields:
-            Tuples of (page_number, page_text)
+        Returns:
+            Iterator yielding (page_number, text) tuples
+            
+        Raises:
+            FileNotFoundError: If the PDF file doesn't exist
+            FileCorruptedError: If the PDF is corrupted
+            ProcessingError: If streaming fails
+            MemoryError: If there's not enough memory
         """
         try:
-            # Import PyMuPDF here to avoid loading it if not needed
+            pdf_path = Path(pdf_path)
+            if not pdf_path.exists():
+                raise FileNotFoundError(f"PDF file not found: {pdf_path}")
+                
+            if pdf_path.suffix.lower() != '.pdf':
+                raise FileTypeError(f"Not a PDF file: {pdf_path}")          # Import PyMuPDF here to avoid loading it if not needed
             import fitz
-        except ImportError:
-            self.logger.error("PyMuPDF not installed. Please install with: pip install pymupdf")
-            return
-        
+        except ImportError as e:
+            raise ProcessingError("PyMuPDF not installed. Please install with: pip install pymupdf") from e
+            
         try:
             # Open the PDF document with PyMuPDF
             doc = fitz.open(pdf_path)
