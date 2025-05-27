@@ -414,7 +414,142 @@ api_endpoint = get_config("api_endpoints.openai")
 qwen_model = get_config("vlm_models.qwen")
 
 # Get nested configuration with default value
+
+## Development
+
+### Code Quality Tools
+
+This project uses several tools to maintain code quality:
+
+1. **Ruff** - Fast Python linter and formatter
+   - Combines functionality of flake8, black, isort, and more
+   - Auto-fixes common issues
+   - Configured in `pyproject.toml`
+
+2. **Mypy** - Static type checker
+   - Enforces type hints
+   - Catches type-related bugs early
+   - Configuration in `pyproject.toml`
+
+3. **Pre-commit** - Git hooks for code quality
+   - Runs checks before each commit
+   - Ensures consistent code style
+   - Configuration in `.pre-commit-config.yaml`
+
+### Setting Up Development Environment
+
+1. Install development dependencies:
+   ```bash
+   pip install -e ".[dev]"
+   ```
+
+2. Install pre-commit hooks:
+   ```bash
+   pre-commit install
+   ```
+
+3. Run code quality checks:
+   ```bash
+   # Run Ruff (linting and formatting)
+   ruff check .
+   ruff format .
+
+   # Run Mypy (type checking)
+   mypy .
+
+   # Run all pre-commit hooks
+   pre-commit run --all-files
+   ```
+
+4. Run tests with coverage:
+   ```bash
+   pytest
+   ```
+
+### Code Style Guide
+
+- Follow Google Python Style Guide
+- Maximum line length: 88 characters
+- Use type hints for all function arguments and return values
+- Write docstrings for all public modules, functions, classes, and methods
+- Keep cyclomatic complexity under 10
+- Write unit tests for new functionality
 chroma_path = get_config("vector_db.chroma.default_path", "./default_chroma_db")
+```
+
+## Memory and CPU Optimization
+
+The `od-parse` library includes specialized tools for processing large documents with minimal CPU and memory footprint:
+
+### Optimized Processing for Large Documents
+
+```python
+from od_parse.advanced.unified_parser import UnifiedPDFParser
+from od_parse.advanced.optimized_processor import OptimizedProcessor
+
+# Initialize the optimized processor with low memory settings
+optimized_processor = OptimizedProcessor({
+    "batch_size": 3,              # Process 3 pages at a time
+    "low_memory_mode": True,      # Enable aggressive memory optimization
+    "max_workers": 1,            # Use single-threaded processing
+    "image_dpi": 100,            # Lower DPI for smaller memory footprint
+    "max_image_dimension": 1200   # Resize large images to reduce memory usage
+})
+
+# Initialize the parser
+parser = UnifiedPDFParser({
+    "use_deep_learning": False,   # Disable deep learning for lower resource usage
+    "extract_tables": True,
+    "extract_forms": True
+})
+
+# Process a large document with optimized memory usage
+result = optimized_processor.process_large_pdf(
+    "path/to/large_document.pdf",
+    parser.parse_image  # Function to process each page
+)
+
+# Stream text from a large document
+for page_num, text in optimized_processor.stream_large_pdf_text("path/to/large_document.pdf"):
+    print(f"Page {page_num + 1}: {text[:100]}...")
+```
+
+### Memory Optimization Techniques
+
+The library employs several techniques to minimize memory usage:
+
+1. **Batch Processing**: Process large documents in small batches of pages
+2. **Memory Mapping**: Use memory-mapped I/O for efficient file access
+3. **Streaming**: Process data as streams rather than loading entire documents
+4. **Image Resizing**: Automatically resize large images to reduce memory usage
+5. **Garbage Collection**: Aggressive garbage collection between processing steps
+6. **Temporary File Management**: Clean up temporary files to free disk space
+
+### CPU Optimization Techniques
+
+The library also includes CPU optimization techniques:
+
+1. **Parallel Processing**: Configurable multi-threading for CPU-intensive tasks
+2. **Lazy Loading**: Load components only when needed
+3. **Efficient Algorithms**: Use optimized algorithms for text extraction and analysis
+4. **Resource Throttling**: Limit CPU usage to prevent system overload
+
+### Configuration Options
+
+You can configure optimization settings in the configuration file:
+
+```yaml
+# Optimization settings for large document processing
+optimization:
+  # Memory optimization
+  batch_size: 5                # Number of pages to process at once
+  use_memory_mapping: true     # Use memory mapping for file I/O
+  low_memory_mode: false       # Enable aggressive memory optimization
+  max_image_dimension: 1500    # Maximum dimension for images
+  image_dpi: 150               # DPI for PDF to image conversion
+  
+  # CPU optimization
+  max_workers: 2               # Maximum number of worker threads
 ```
 
 ## Command Line Interface

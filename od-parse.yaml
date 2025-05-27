@@ -55,3 +55,19 @@ system_prompts:
     Focus only on form fields in this document. For each form field, identify the field label/name,
     extract the field value, and determine the field type (text, checkbox, radio button, etc.).
     Format your response as a JSON object with field names as keys.
+
+# Optimization settings for large document processing
+optimization:
+  # Memory optimization
+  batch_size: 5                # Number of pages to process at once
+  use_memory_mapping: true     # Use memory mapping for file I/O
+  low_memory_mode: false       # Enable aggressive memory optimization
+  max_image_dimension: 1500    # Maximum dimension for images (resize larger images)
+  image_dpi: 150               # DPI for PDF to image conversion
+  image_quality: 85            # JPEG quality for image conversion
+  
+  # CPU optimization
+  max_workers: 2               # Maximum number of worker threads
+  
+  # Storage optimization
+  temp_dir: "/tmp/od-parse"    # Directory for temporary files
