@@ -40,3 +40,30 @@ def get_logger(name: str, level: Optional[int] = None) -> logging.Logger:
         logger.addHandler(handler)
     
     return logger
+
+
+def configure_logging(level: int = logging.INFO) -> None:
+    """
+    Configure the root logger for the application.
+
+    Args:
+        level: Logging level to set
+    """
+    # Configure root logger
+    logging.basicConfig(
+        level=level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+
+    # Set specific loggers to appropriate levels
+    logging.getLogger('od_parse').setLevel(level)
+
+    # Suppress verbose logs from third-party libraries unless in debug mode
+    if level > logging.DEBUG:
+        logging.getLogger('PIL').setLevel(logging.WARNING)
+        logging.getLogger('matplotlib').setLevel(logging.WARNING)
+        logging.getLogger('transformers').setLevel(logging.WARNING)
+        logging.getLogger('torch').setLevel(logging.WARNING)
