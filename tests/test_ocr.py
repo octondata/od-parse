@@ -27,27 +27,41 @@ class TestOCRModule(unittest.TestCase):
     
     @patch('pytesseract.image_to_string')
     @patch('PIL.Image.open')
+    @patch('od_parse.ocr.handwritten.preprocess_image_for_ocr')
     @patch('cv2.cvtColor')
-    def test_extract_handwritten_content_mocked(self, mock_cvtColor, mock_image_open, mock_image_to_string):
+    @patch('numpy.array')
+    def test_extract_handwritten_content_mocked(self, mock_np_array, mock_cvtColor, mock_preprocess, mock_image_open, mock_image_to_string):
         """Test extracting handwritten content with mocked dependencies."""
+        import numpy as np
+
         # Mock the dependencies
         mock_image = MagicMock()
         mock_image_open.return_value = mock_image
-        
-        mock_cv_img = MagicMock()
-        mock_cvtColor.return_value = mock_cv_img
-        
+
+        # Create a proper numpy array mock
+        fake_array = np.zeros((100, 100, 3), dtype=np.uint8)
+        mock_np_array.return_value = fake_array
+
+        # Mock cv2.cvtColor to return a proper numpy array
+        fake_cv_img = np.zeros((100, 100, 3), dtype=np.uint8)
+        mock_cvtColor.return_value = fake_cv_img
+
+        # Mock the preprocessing function to return a proper numpy array
+        fake_processed_img = np.zeros((100, 100), dtype=np.uint8)
+        mock_preprocess.return_value = fake_processed_img
+
         mock_image_to_string.return_value = "Handwritten text"
-        
+
         # Call the function
         result = extract_handwritten_content("fake_image.png")
-        
+
         # Verify the result
         self.assertEqual(result, "Handwritten text")
-        
+
         # Verify the mocks were called
         mock_image_open.assert_called_once_with("fake_image.png")
         mock_cvtColor.assert_called_once()
+        mock_preprocess.assert_called_once()
         mock_image_to_string.assert_called_once()
     
     def test_extract_handwritten_content_with_sample_image(self):
@@ -72,28 +86,36 @@ class TestOCRModule(unittest.TestCase):
     @patch('cv2.erode')
     def test_preprocess_image_for_ocr(self, mock_erode, mock_dilate, mock_threshold, mock_blur, mock_cvtColor):
         """Test image preprocessing for OCR."""
-        # Mock the dependencies
-        mock_image = MagicMock()
-        mock_gray = MagicMock()
-        mock_blur = MagicMock()
-        mock_threshold = MagicMock()
-        mock_dilate = MagicMock()
-        mock_erode = MagicMock()
-        
-        mock_cvtColor.return_value = mock_gray
-        mock_blur.return_value = mock_blur
-        mock_threshold.return_value = mock_threshold
-        mock_dilate.return_value = mock_dilate
-        mock_erode.return_value = mock_erode
-        
+        import numpy as np
+
+        # Create proper numpy arrays for mocking
+        input_image = np.zeros((100, 100, 3), dtype=np.uint8)
+        gray_image = np.zeros((100, 100), dtype=np.uint8)
+        blurred_image = np.zeros((100, 100), dtype=np.uint8)
+        threshold_image = np.zeros((100, 100), dtype=np.uint8)
+        dilated_image = np.zeros((100, 100), dtype=np.uint8)
+        eroded_image = np.zeros((100, 100), dtype=np.uint8)
+
+        # Set up the mock chain
+        mock_cvtColor.return_value = gray_image
+        mock_blur.return_value = blurred_image
+        mock_threshold.return_value = threshold_image
+        mock_dilate.return_value = dilated_image
+        mock_erode.return_value = eroded_image
+
         # Call the function
-        result = preprocess_image_for_ocr(mock_image)
-        
+        result = preprocess_image_for_ocr(input_image)
+
         # Verify the mocks were called
         mock_cvtColor.assert_called_once()
-        
-        # We don't assert the result since it's mocked
+        mock_blur.assert_called_once()
+        mock_threshold.assert_called_once()
+        mock_dilate.assert_called_once()
+        mock_erode.assert_called_once()
+
+        # Verify the result is the final processed image
         self.assertIsNotNone(result)
+        self.assertEqual(result.shape, eroded_image.shape)
 
 if __name__ == "__main__":
     unittest.main()

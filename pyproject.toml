@@ -27,10 +27,6 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Image Processing",
 ]
 
-[project.urls]
-"Homepage" = "https://github.com/OctonData/od-parse"
-"Bug Tracker" = "https://github.com/OctonData/od-parse/issues"
-
 dependencies = [
     "pdfminer.six>=20221105",
     "pytesseract>=0.3.10",
@@ -41,6 +37,10 @@ dependencies = [
     "tabula-py>=2.7.0",
     "markdown>=3.4.3",
 ]
+
+[project.urls]
+"Homepage" = "https://github.com/OctonData/od-parse"
+"Bug Tracker" = "https://github.com/OctonData/od-parse/issues"
 
 [project.optional-dependencies]
 dev = [
