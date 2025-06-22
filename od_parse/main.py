@@ -1,8 +1,8 @@
 """
 OctonData Parse - Main Interface Module
 
-This module provides an easy-to-use interface to the advanced PDF parsing capabilities
-of the od-parse library, allowing users to extract rich content from complex documents.
+This module provides an easy-to-use interface to the PDF parsing capabilities
+of the od-parse library, allowing users to extract rich content from documents.
 """
 
 import os
@@ -13,107 +13,240 @@ from pathlib import Path
 import logging
 from typing import Dict, List, Any, Optional, Union
 
-from od_parse.advanced.unified_parser import UnifiedPDFParser
-from od_parse.advanced.pipeline import (
-    PDFPipeline, 
-    LoadDocumentStage,
-    BasicParsingStage,
-    AdvancedParsingStage,
-    TableExtractionStage,
-    FormExtractionStage,
-    HandwrittenContentStage,
-    DocumentStructureStage,
-    OutputFormattingStage
-)
-from od_parse.utils.logging_utils import get_logger, configure_logging
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import core parsing functionality
+try:
+    from od_parse.parser import parse_pdf as core_parse_pdf
+    from od_parse.converter import convert_to_markdown
+    from od_parse.config import get_advanced_config
+    from od_parse.utils.logging_utils import get_logger, configure_logging
+except ImportError:
+    # Fallback for when running from within od_parse directory
+    from parser import parse_pdf as core_parse_pdf
+    from converter import convert_to_markdown
+    from config import get_advanced_config
+    from utils.logging_utils import get_logger, configure_logging
 
 
 def parse_pdf(
-    file_path: Union[str, Path], 
+    file_path: Union[str, Path],
     output_format: str = "json",
     output_file: Optional[str] = None,
     pipeline_type: str = "default",
     use_deep_learning: bool = True
 ) -> Dict[str, Any]:
     """
-    Parse a PDF file using the unified parser.
-    
+    Parse a PDF file using the available parsing capabilities.
+
     Args:
         file_path: Path to the PDF file
         output_format: Format for output (json, markdown, text, summary)
         output_file: Path to output file (if None, no file is written)
-        pipeline_type: Type of pipeline to use (default, full, fast, tables, forms, structure)
-        use_deep_learning: Whether to use deep learning models
-        
+        pipeline_type: Type of processing to use (default, full, fast, tables, forms, structure)
+        use_deep_learning: Whether to use advanced features (if available)
+
     Returns:
         Dictionary containing parsed content
     """
+    import time
+    start_time = time.time()
+
     logger = get_logger(__name__)
-    
+
     # Validate file path
     if isinstance(file_path, str):
         file_path = Path(file_path)
-    
+
     if not file_path.exists():
         raise FileNotFoundError(f"File not found: {file_path}")
-    
+
     if not file_path.suffix.lower() == '.pdf':
         raise ValueError(f"File is not a PDF: {file_path}")
-    
-    # Select pipeline based on type
-    logger.info(f"Using pipeline type: {pipeline_type}")
-    
-    if pipeline_type == "full":
-        pipeline = PDFPipeline.create_full_pipeline()
-    elif pipeline_type == "fast":
-        pipeline = PDFPipeline.create_fast_pipeline()
-    elif pipeline_type == "tables":
-        pipeline = PDFPipeline.create_tables_pipeline()
-    elif pipeline_type == "forms":
-        pipeline = PDFPipeline.create_forms_pipeline()
-    elif pipeline_type == "structure":
-        pipeline = PDFPipeline.create_structure_pipeline()
-    else:
-        # Custom default pipeline
-        pipeline = PDFPipeline()
-        pipeline.add_stage(LoadDocumentStage())
-        
-        if use_deep_learning:
-            pipeline.add_stage(AdvancedParsingStage())
-        else:
-            pipeline.add_stage(BasicParsingStage())
-            
-        pipeline.add_stage(TableExtractionStage({"use_neural": use_deep_learning}))
-        
-        if use_deep_learning:
-            pipeline.add_stage(FormExtractionStage())
-            pipeline.add_stage(HandwrittenContentStage())
-            pipeline.add_stage(DocumentStructureStage())
-            
-        pipeline.add_stage(OutputFormattingStage({"format": output_format}))
-    
-    # Process the document
+
     logger.info(f"Processing document: {file_path}")
-    result = pipeline.process(file_path)
-    
+    logger.info(f"Pipeline type: {pipeline_type}")
+    logger.info(f"Use advanced features: {use_deep_learning}")
+
+    # Configure advanced features if requested
+    config = get_advanced_config()
+    if use_deep_learning:
+        # Enable available advanced features
+        config.enable_feature('trocr', check_dependencies=False)
+        config.enable_feature('table_transformer', check_dependencies=False)
+        config.enable_feature('quality_assessment', check_dependencies=False)
+        config.enable_feature('multilingual', check_dependencies=False)
+
+    # Parse the PDF using core functionality
+    try:
+        parsed_data = core_parse_pdf(str(file_path))
+    except Exception as e:
+        logger.error(f"Core parsing failed: {e}")
+        # Create minimal result structure
+        parsed_data = {
+            "text": "",
+            "tables": [],
+            "forms": [],
+            "images": [],
+            "metadata": {"error": str(e)}
+        }
+
+    # Enhance with advanced features if available and requested
+    if use_deep_learning:
+        parsed_data = _enhance_with_advanced_features(parsed_data, file_path, pipeline_type)
+
+    # Add processing metadata
+    processing_time = time.time() - start_time
+    file_stats = file_path.stat()
+
+    # Create comprehensive result
+    result = {
+        "parsed_data": parsed_data,
+        "metadata": {
+            "file_name": file_path.name,
+            "file_path": str(file_path),
+            "file_size": file_stats.st_size,
+            "processing_time_seconds": processing_time,
+            "pipeline_type": pipeline_type,
+            "use_deep_learning": use_deep_learning,
+            "timestamp": time.time()
+        },
+        "summary": _create_summary(parsed_data, file_path, processing_time)
+    }
+
+    # Convert to requested format
+    if output_format == "markdown":
+        try:
+            markdown_content = convert_to_markdown(parsed_data)
+            result["markdown_output"] = markdown_content
+        except Exception as e:
+            logger.warning(f"Markdown conversion failed: {e}")
+            result["markdown_output"] = f"# {file_path.name}\n\nMarkdown conversion failed: {e}"
+
     # Write output to file if specified
     if output_file:
-        output_path = Path(output_file)
-        
-        # Create directory if it doesn't exist
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        
+        _write_output_file(result, output_file, output_format, logger)
+
+    return result
+
+
+def _enhance_with_advanced_features(parsed_data: Dict[str, Any], file_path: Path, pipeline_type: str) -> Dict[str, Any]:
+    """Enhance parsed data with advanced features if available."""
+    logger = get_logger(__name__)
+
+    # Try to enhance with quality assessment
+    try:
+        from od_parse.quality import assess_document_quality
+        quality_result = assess_document_quality(parsed_data)
+        parsed_data["quality_assessment"] = quality_result
+        logger.info(f"Quality assessment completed. Overall score: {quality_result.get('overall_score', 0):.2f}")
+    except ImportError:
+        logger.debug("Quality assessment not available")
+    except Exception as e:
+        logger.warning(f"Quality assessment failed: {e}")
+
+    # Try to enhance with TrOCR if focusing on text
+    if pipeline_type in ["default", "full", "fast"]:
+        try:
+            from od_parse.ocr import TrOCREngine
+            engine = TrOCREngine()
+            if engine.is_available():
+                logger.info("TrOCR enhancement available but requires image input")
+        except ImportError:
+            logger.debug("TrOCR not available")
+        except Exception as e:
+            logger.warning(f"TrOCR enhancement failed: {e}")
+
+    # Try to enhance with multilingual processing
+    if "text" in parsed_data and parsed_data["text"]:
+        try:
+            from od_parse.multilingual import detect_document_language
+            text_content = parsed_data["text"]
+            if isinstance(text_content, dict):
+                text_content = text_content.get("content", "")
+
+            if text_content:
+                language_result = detect_document_language(text_content)
+                parsed_data["language_detection"] = language_result
+                logger.info(f"Detected language: {language_result.get('language', 'unknown')}")
+        except ImportError:
+            logger.debug("Multilingual processing not available")
+        except Exception as e:
+            logger.warning(f"Language detection failed: {e}")
+
+    return parsed_data
+
+
+def _create_summary(parsed_data: Dict[str, Any], file_path: Path, processing_time: float) -> Dict[str, Any]:
+    """Create a summary of the parsing results."""
+    # Count extracted elements
+    tables_count = len(parsed_data.get("tables", []))
+    forms_count = len(parsed_data.get("forms", []))
+    images_count = len(parsed_data.get("images", []))
+
+    # Estimate text length
+    text_content = parsed_data.get("text", "")
+    if isinstance(text_content, dict):
+        text_content = text_content.get("content", "")
+    text_length = len(str(text_content))
+
+    # Get quality score if available
+    quality_score = None
+    if "quality_assessment" in parsed_data:
+        quality_score = parsed_data["quality_assessment"].get("overall_score")
+
+    # Get detected language if available
+    detected_language = None
+    if "language_detection" in parsed_data:
+        detected_language = parsed_data["language_detection"].get("language")
+
+    return {
+        "file_name": file_path.name,
+        "file_size": file_path.stat().st_size,
+        "page_count": parsed_data.get("metadata", {}).get("page_count", "unknown"),
+        "processing_time_seconds": processing_time,
+        "extraction_statistics": {
+            "text_length": text_length,
+            "tables_extracted": tables_count,
+            "form_fields_extracted": forms_count,
+            "images_extracted": images_count,
+            "handwritten_items_extracted": 0,  # Not implemented yet
+            "structure_elements_extracted": 0   # Not implemented yet
+        },
+        "quality_score": quality_score,
+        "detected_language": detected_language,
+        "has_advanced_features": any([
+            "quality_assessment" in parsed_data,
+            "language_detection" in parsed_data
+        ])
+    }
+
+
+def _write_output_file(result: Dict[str, Any], output_file: str, output_format: str, logger) -> None:
+    """Write the result to an output file."""
+    output_path = Path(output_file)
+
+    # Create directory if it doesn't exist
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
         # Write output based on format
-        if output_format == "json" or output_format == "summary":
+        if output_format == "json":
             with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(result, f, indent=2)
+                json.dump(result, f, indent=2, default=str)
         elif output_format == "markdown":
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(result.get("markdown_output", ""))
-        
+        elif output_format == "summary":
+            with open(output_path, 'w', encoding='utf-8') as f:
+                json.dump(result.get("summary", {}), f, indent=2, default=str)
+
         logger.info(f"Output written to: {output_path}")
-    
-    return result
+
+    except Exception as e:
+        logger.error(f"Failed to write output file: {e}")
+        raise
 
 
 def main():
