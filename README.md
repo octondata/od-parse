@@ -29,12 +29,21 @@ An enterprise-grade library for parsing complex PDFs using advanced AI technique
 # Install the basic package
 pip install od-parse
 
-# Install with all dependencies
+# Install with all advanced features
 pip install "od-parse[all]"
 
-# Install with specific feature dependencies
-pip install "od-parse[ocr]"  # For OCR capabilities
-pip install "od-parse[tables]"  # For table extraction
+# Install with specific advanced features
+pip install "od-parse[trocr]"              # TrOCR text recognition
+pip install "od-parse[table_transformer]"  # Neural table extraction
+pip install "od-parse[llava_next]"         # Document understanding with VLMs
+pip install "od-parse[multilingual]"       # Multi-language support
+pip install "od-parse[quality_assessment]" # Quality assessment metrics
+pip install "od-parse[async_processing]"   # Async processing capabilities
+
+# Install preset combinations
+pip install "od-parse[basic]"        # Essential features
+pip install "od-parse[advanced]"     # All stable features
+pip install "od-parse[experimental]" # All features including experimental
 ```
 
 ## Quick Start
@@ -52,6 +61,123 @@ markdown = convert_to_markdown(parsed_data)
 with open("output.md", "w") as f:
     f.write(markdown)
 ```
+
+## Advanced Features
+
+od-parse includes cutting-edge AI features that can be enabled as needed:
+
+### Feature Configuration
+
+```python
+from od_parse.config import get_advanced_config
+
+# Get configuration instance
+config = get_advanced_config()
+
+# Enable individual features
+config.enable_feature('trocr')              # Transformer-based OCR
+config.enable_feature('table_transformer')  # Neural table extraction
+config.enable_feature('llava_next')         # Document understanding
+config.enable_feature('multilingual')       # Multi-language support
+config.enable_feature('quality_assessment') # Quality metrics
+config.enable_feature('async_processing')   # Async processing
+
+# Or use presets
+config.enable_preset('advanced')  # Enable all stable features
+```
+
+### TrOCR Text Recognition
+
+Superior text recognition using transformer models:
+
+```python
+from od_parse.ocr import TrOCREngine
+
+engine = TrOCREngine(model_name="microsoft/trocr-base-printed")
+result = engine.extract_text("document.png")
+print(f"Text: {result['text']}")
+print(f"Confidence: {result['confidence']}")
+```
+
+### Neural Table Extraction
+
+Advanced table detection and extraction:
+
+```python
+from od_parse.advanced import TableTransformerEngine
+
+engine = TableTransformerEngine()
+result = engine.extract_tables("document_with_tables.png")
+for table in result['tables']:
+    print(f"Table confidence: {table['confidence']}")
+    print(f"Structure: {table['structure']}")
+```
+
+### Document Understanding with LLaVA-NeXT
+
+AI-powered document understanding:
+
+```python
+from od_parse.advanced import LLaVANextEngine
+
+engine = LLaVANextEngine()
+result = engine.understand_document(
+    "complex_document.png",
+    "Analyze this document and describe its structure and content."
+)
+print(f"Understanding: {result['understanding']}")
+```
+
+### Multi-Language Support
+
+Process documents in multiple languages:
+
+```python
+from od_parse.multilingual import MultilingualProcessor
+
+processor = MultilingualProcessor()
+
+# Detect language
+detection = processor.detect_language("Este es un documento en español.")
+print(f"Language: {detection['language']}")
+
+# Process with translation
+result = processor.process_multilingual_text(
+    "Bonjour, comment allez-vous?",
+    target_language="en",
+    include_translation=True
+)
+```
+
+### Quality Assessment
+
+Assess extraction quality and get recommendations:
+
+```python
+from od_parse.quality import assess_document_quality
+
+quality = assess_document_quality(extraction_result)
+print(f"Overall Score: {quality['overall_score']:.2f}")
+for rec in quality['recommendations']:
+    print(f"• {rec}")
+```
+
+### Async Processing
+
+Process large batches asynchronously:
+
+```python
+import asyncio
+from od_parse.async_processing import process_files_async
+
+async def main():
+    files = ["doc1.pdf", "doc2.pdf", "doc3.pdf"]
+    results = await process_files_async(files, your_processor_function)
+
+asyncio.run(main())
+```
+
+For detailed documentation on advanced features, see [ADVANCED_FEATURES.md](ADVANCED_FEATURES.md).
 
 ## Advanced Usage
 

@@ -7,9 +7,15 @@ from various sources (environment variables, config files, etc.).
 
 import os
 import json
-import yaml
 from pathlib import Path
 from typing import Dict, Any, Optional
+
+# Optional import for YAML support
+try:
+    import yaml
+    YAML_AVAILABLE = True
+except ImportError:
+    YAML_AVAILABLE = False
 
 from od_parse.utils.logging_utils import get_logger
 
@@ -172,10 +178,9 @@ def _load_from_file(config_path: str) -> Dict[str, Any]:
         
         with open(path, "r") as f:
             if path.suffix.lower() in [".yaml", ".yml"]:
-                try:
-                    import yaml
+                if YAML_AVAILABLE:
                     return yaml.safe_load(f)
-                except ImportError:
+                else:
                     logger.warning("PyYAML not installed. Please install it with: pip install pyyaml")
                     return {}
             else:
