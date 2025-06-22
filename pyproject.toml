@@ -50,6 +50,111 @@ dev = [
     "flake8>=6.0.0",
 ]
 
+# Advanced OCR features
+trocr = [
+    "torch>=2.0.0",
+    "transformers>=4.30.0",
+    "torchvision>=0.15.0",
+]
+
+# Advanced table extraction
+table_transformer = [
+    "torch>=2.0.0",
+    "transformers>=4.30.0",
+    "detectron2>=0.6",
+]
+
+# Document understanding with vision-language models
+llava_next = [
+    "torch>=2.0.0",
+    "transformers>=4.40.0",
+    "accelerate>=0.20.0",
+    "bitsandbytes>=0.41.0",
+]
+
+# Quality assessment
+quality_assessment = [
+    "scikit-learn>=1.3.0",
+    "scipy>=1.10.0",
+]
+
+# Async processing
+async_processing = [
+    "aiofiles>=23.0.0",
+]
+
+# Multi-language support
+multilingual = [
+    "spacy>=3.6.0",
+    "langdetect>=1.0.9",
+    "polyglot>=16.7.4",
+    "googletrans>=4.0.0",
+]
+
+# GPU acceleration
+gpu_acceleration = [
+    "cupy-cuda11x>=12.0.0",
+]
+
+# Advanced caching
+advanced_caching = [
+    "redis>=4.5.0",
+    "joblib>=1.3.0",
+]
+
+# Preset combinations
+basic = [
+    "scikit-learn>=1.3.0",
+    "scipy>=1.10.0",
+    "aiofiles>=23.0.0",
+]
+
+advanced = [
+    "torch>=2.0.0",
+    "transformers>=4.30.0",
+    "torchvision>=0.15.0",
+    "detectron2>=0.6",
+    "scikit-learn>=1.3.0",
+    "scipy>=1.10.0",
+    "aiofiles>=23.0.0",
+    "spacy>=3.6.0",
+    "langdetect>=1.0.9",
+]
+
+experimental = [
+    "torch>=2.0.0",
+    "transformers>=4.40.0",
+    "torchvision>=0.15.0",
+    "accelerate>=0.20.0",
+    "bitsandbytes>=0.41.0",
+    "detectron2>=0.6",
+    "scikit-learn>=1.3.0",
+    "scipy>=1.10.0",
+    "aiofiles>=23.0.0",
+    "spacy>=3.6.0",
+    "langdetect>=1.0.9",
+]
+
+# All optional dependencies
+all = [
+    "torch>=2.0.0",
+    "transformers>=4.40.0",
+    "torchvision>=0.15.0",
+    "accelerate>=0.20.0",
+    "bitsandbytes>=0.41.0",
+    "detectron2>=0.6",
+    "scikit-learn>=1.3.0",
+    "scipy>=1.10.0",
+    "aiofiles>=23.0.0",
+    "spacy>=3.6.0",
+    "langdetect>=1.0.9",
+    "polyglot>=16.7.4",
+    "googletrans>=4.0.0",
+    "cupy-cuda11x>=12.0.0",
+    "redis>=4.5.0",
+    "joblib>=1.3.0",
+]
+
 [tool.black]
 line-length = 88
 target-version = ["py38"]
