@@ -46,6 +46,8 @@ pip install "od-parse[advanced]"     # All stable features
 pip install "od-parse[experimental]" # All features including experimental
 ```
 
+> **🔒 Privacy Note:** All processing is local by default. No API keys required for core functionality.
+
 ## Quick Start
 
 ```python
@@ -178,6 +180,54 @@ asyncio.run(main())
 ```
 
 For detailed documentation on advanced features, see [ADVANCED_FEATURES.md](ADVANCED_FEATURES.md).
+
+## 🔒 Privacy & External APIs
+
+**od-parse is privacy-first and works completely offline by default.** No data leaves your machine unless you explicitly configure external APIs.
+
+### Default Behavior (100% Local)
+- ✅ PDF parsing, OCR, table extraction - all local
+- ✅ Advanced AI models (TrOCR, LLaVA-NeXT) - download once, run locally
+- ✅ Quality assessment and multilingual detection - local processing
+- ✅ No API keys required for core functionality
+
+### Optional External APIs
+External APIs are **only** used for optional enhancements:
+
+| Feature | External Service | Required? | Local Alternative |
+|---------|-----------------|-----------|-------------------|
+| Translation | Google Translate | No | Language detection only |
+| Cloud VLMs | OpenAI/Anthropic | No | Local LLaVA-NeXT model |
+| Cloud OCR | Azure/AWS | No | Local TrOCR/Tesseract |
+
+### Configuring External APIs (Optional)
+
+**Preferred Method - Environment Variables:**
+```bash
+# Only set these if you want external API features
+export GOOGLE_API_KEY="your-google-translate-key"        # For translation
+export OPENAI_API_KEY="your-openai-key"                  # For cloud VLMs
+export ANTHROPIC_API_KEY="your-anthropic-key"            # For Claude Vision
+```
+
+**Alternative - Configuration File:**
+```yaml
+# ~/.config/od-parse/config.yaml
+api_keys:
+  google: "your-google-translate-key"
+  openai: "your-openai-key"
+```
+
+**Check Configuration:**
+```python
+from od_parse.config import get_advanced_config
+
+config = get_advanced_config()
+print(f"Google Translate: {config.has_api_key('google')}")
+print(f"OpenAI: {config.has_api_key('openai')}")
+```
+
+> **🛡️ Security Note:** All external APIs are optional. The library works fully without any API keys.
 
 ## Advanced Usage
 

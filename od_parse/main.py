@@ -135,6 +135,21 @@ def _enhance_with_advanced_features(parsed_data: Dict[str, Any], file_path: Path
     """Enhance parsed data with advanced features if available."""
     logger = get_logger(__name__)
 
+    # Try to enhance with intelligent document analysis
+    try:
+        from od_parse.intelligence import DocumentAnalyzer
+        analyzer = DocumentAnalyzer()
+        intelligence_result = analyzer.analyze_document(parsed_data)
+        parsed_data["document_intelligence"] = intelligence_result
+
+        doc_type = intelligence_result.get("document_intelligence", {}).get("document_type", "unknown")
+        confidence = intelligence_result.get("document_intelligence", {}).get("confidence", 0)
+        logger.info(f"Document intelligence completed. Type: {doc_type}, Confidence: {confidence:.2f}")
+    except ImportError:
+        logger.debug("Document intelligence not available")
+    except Exception as e:
+        logger.warning(f"Document intelligence failed: {e}")
+
     # Try to enhance with quality assessment
     try:
         from od_parse.quality import assess_document_quality
@@ -223,6 +238,55 @@ def _create_summary(parsed_data: Dict[str, Any], file_path: Path, processing_tim
     }
 
 
+def _clean_for_json(obj):
+    """Clean data structure for valid JSON serialization."""
+    import math
+
+    if isinstance(obj, dict):
+        cleaned = {}
+        for key, value in obj.items():
+            # Clean the key
+            clean_key = str(key).strip()
+            if not clean_key:
+                clean_key = "unknown_key"
+
+            # Clean the value
+            cleaned[clean_key] = _clean_for_json(value)
+        return cleaned
+
+    elif isinstance(obj, list):
+        return [_clean_for_json(item) for item in obj]
+
+    elif isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+
+    elif obj is None:
+        return None
+
+    elif isinstance(obj, str):
+        # Handle unicode characters and clean up
+        try:
+            # Replace common problematic characters
+            cleaned = obj.replace('\u2013', '-')  # em dash
+            cleaned = cleaned.replace('\u2014', '--')  # en dash
+            cleaned = cleaned.replace('\u2019', "'")  # right single quotation
+            cleaned = cleaned.replace('\u201c', '"')  # left double quotation
+            cleaned = cleaned.replace('\u201d', '"')  # right double quotation
+            cleaned = cleaned.strip()
+            return cleaned if cleaned else None
+        except:
+            return str(obj)
+
+    else:
+        try:
+            # Try to convert to string, handle any encoding issues
+            return str(obj)
+        except:
+            return None
+
+
 def _write_output_file(result: Dict[str, Any], output_file: str, output_format: str, logger) -> None:
     """Write the result to an output file."""
     output_path = Path(output_file)
@@ -233,14 +297,18 @@ def _write_output_file(result: Dict[str, Any], output_file: str, output_format: 
     try:
         # Write output based on format
         if output_format == "json":
+            # Clean the result for valid JSON
+            cleaned_result = _clean_for_json(result)
             with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(result, f, indent=2, default=str)
+                json.dump(cleaned_result, f, indent=2, ensure_ascii=False)
         elif output_format == "markdown":
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(result.get("markdown_output", ""))
         elif output_format == "summary":
+            # Clean the summary for valid JSON
+            cleaned_summary = _clean_for_json(result.get("summary", {}))
             with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(result.get("summary", {}), f, indent=2, default=str)
+                json.dump(cleaned_summary, f, indent=2, ensure_ascii=False)
 
         logger.info(f"Output written to: {output_path}")
 
@@ -307,22 +375,35 @@ def main():
         # Print summary if no output file
         if not args.output_file:
             if args.output_format == "json":
-                print(json.dumps(result, indent=2))
+                # Clean the result for valid JSON output
+                cleaned_result = _clean_for_json(result)
+                print(json.dumps(cleaned_result, indent=2, ensure_ascii=False))
             elif args.output_format == "markdown":
                 print(result.get("markdown_output", ""))
             elif args.output_format == "summary":
                 summary = result.get("summary", {})
                 print("\nDOCUMENT SUMMARY")
                 print("================")
-                print(f"File: {summary.get('file_name')}")
-                print(f"Size: {summary.get('file_size')} bytes")
-                print(f"Pages: {summary.get('page_count')}")
+                print(f"File: {summary.get('file_name', 'Unknown')}")
+                print(f"Size: {summary.get('file_size', 0)} bytes")
+                print(f"Pages: {summary.get('page_count', 'Unknown')}")
                 print("\nExtraction Statistics:")
                 stats = summary.get("extraction_statistics", {})
+                print(f"- Text Length: {stats.get('text_length', 0)} characters")
                 print(f"- Tables: {stats.get('tables_extracted', 0)}")
                 print(f"- Form Fields: {stats.get('form_fields_extracted', 0)}")
+                print(f"- Images: {stats.get('images_extracted', 0)}")
                 print(f"- Handwritten Items: {stats.get('handwritten_items_extracted', 0)}")
                 print(f"- Structure Elements: {stats.get('structure_elements_extracted', 0)}")
+
+                # Show quality score if available
+                if summary.get('quality_score') is not None:
+                    print(f"\nQuality Score: {summary.get('quality_score', 0):.2f}")
+
+                # Show detected language if available
+                if summary.get('detected_language'):
+                    print(f"Detected Language: {summary.get('detected_language')}")
+
                 print(f"\nProcessing Time: {summary.get('processing_time_seconds', 0):.2f} seconds")
         
         return 0
