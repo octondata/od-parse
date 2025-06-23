@@ -27,11 +27,11 @@ logger = get_logger(__name__)
 def parse_pdf(file_path: Union[str, Path], **kwargs) -> Dict[str, Any]:
     """
     Parse a PDF file and extract its content.
-    
+
     Args:
         file_path: Path to the PDF file
         **kwargs: Additional arguments for parsing
-    
+
     Returns:
         Dictionary containing extracted content:
         {
@@ -39,19 +39,29 @@ def parse_pdf(file_path: Union[str, Path], **kwargs) -> Dict[str, Any]:
             'images': list of extracted images,
             'tables': list of extracted tables,
             'forms': list of extracted form elements,
-            'handwritten_content': list of extracted handwritten content
+            'handwritten_content': list of extracted handwritten content,
+            'metadata': document metadata
         }
     """
     file_path = validate_file(file_path, extension='.pdf')
-    
+
     logger.info(f"Parsing PDF file: {file_path}")
-    
+
+    # Get document metadata
+    try:
+        from pdfminer.pdfpage import PDFPage
+        with open(file_path, 'rb') as file:
+            page_count = len(list(PDFPage.get_pages(file)))
+    except Exception as e:
+        logger.warning(f"Could not determine page count: {e}")
+        page_count = "unknown"
+
     # Extract content
     text = extract_text(file_path)
     images = extract_images(file_path)
     tables = extract_tables(file_path)
     forms = extract_forms(file_path)
-    
+
     # Process images for handwritten content
     handwritten_content = []
     for img_path in images:
@@ -61,27 +71,59 @@ def parse_pdf(file_path: Union[str, Path], **kwargs) -> Dict[str, Any]:
                 handwritten_content.append(content)
         except Exception as e:
             logger.error(f"Error extracting handwritten content from {img_path}: {e}")
-    
+
+    # Create metadata
+    file_stats = Path(file_path).stat()
+    metadata = {
+        "file_name": Path(file_path).name,
+        "file_size": file_stats.st_size,
+        "page_count": page_count,
+        "extraction_method": "pdfminer + tabula",
+        "text_length": len(text) if text else 0,
+        "tables_found": len(tables),
+        "forms_found": len(forms),
+        "images_found": len(images),
+        "handwritten_items_found": len(handwritten_content)
+    }
+
     return {
         'text': text,
         'images': images,
         'tables': tables,
         'forms': forms,
-        'handwritten_content': handwritten_content
+        'handwritten_content': handwritten_content,
+        'metadata': metadata
     }
 
 def extract_text(file_path: Union[str, Path]) -> str:
     """
     Extract text content from a PDF file.
-    
+
     Args:
         file_path: Path to the PDF file
-    
+
     Returns:
-        Extracted text content
+        Extracted text content (cleaned for JSON compatibility)
     """
     try:
-        return pdfminer_extract_text(file_path)
+        raw_text = pdfminer_extract_text(file_path)
+
+        # Clean the text for better JSON compatibility
+        if raw_text:
+            # Replace problematic unicode characters
+            cleaned_text = raw_text.replace('\u2013', '-')  # em dash
+            cleaned_text = cleaned_text.replace('\u2014', '--')  # en dash
+            cleaned_text = cleaned_text.replace('\u2019', "'")  # right single quotation
+            cleaned_text = cleaned_text.replace('\u201c', '"')  # left double quotation
+            cleaned_text = cleaned_text.replace('\u201d', '"')  # right double quotation
+            cleaned_text = cleaned_text.replace('\u00a0', ' ')  # non-breaking space
+
+            # Remove excessive whitespace
+            cleaned_text = ' '.join(cleaned_text.split())
+
+            return cleaned_text
+
+        return ""
     except Exception as e:
         logger.error(f"Error extracting text from {file_path}: {e}")
         return ""
@@ -135,17 +177,60 @@ def extract_images(file_path: Union[str, Path], output_dir: Optional[str] = None
 def extract_tables(file_path: Union[str, Path]) -> List[Dict[str, Any]]:
     """
     Extract tables from a PDF file.
-    
+
     Args:
         file_path: Path to the PDF file
-    
+
     Returns:
         List of extracted tables as dictionaries
     """
     try:
         # Use tabula-py to extract tables
         tables = tabula.read_pdf(file_path, pages='all', multiple_tables=True)
-        return [table.to_dict(orient='records') for table in tables]
+
+        cleaned_tables = []
+        for table in tables:
+            # Clean the table data
+            # Replace NaN values with None and clean strings
+            cleaned_table = table.fillna('')  # Replace NaN with empty string
+
+            # Convert to dictionary and clean further
+            table_dict = cleaned_table.to_dict(orient='records')
+
+            # Clean each row
+            cleaned_rows = []
+            for row in table_dict:
+                cleaned_row = {}
+                for key, value in row.items():
+                    # Clean the key
+                    clean_key = str(key).strip() if key is not None else "unknown_column"
+                    if not clean_key or clean_key.lower() in ['nan', 'none']:
+                        clean_key = "unknown_column"
+
+                    # Clean the value
+                    if value is None or (isinstance(value, float) and (value != value)):  # Check for NaN
+                        clean_value = None
+                    elif isinstance(value, str):
+                        clean_value = value.strip()
+                        if not clean_value or clean_value.lower() in ['nan', 'none']:
+                            clean_value = None
+                    else:
+                        clean_value = value
+
+                    cleaned_row[clean_key] = clean_value
+
+                # Only add row if it has some meaningful content
+                if any(v is not None and str(v).strip() for v in cleaned_row.values()):
+                    cleaned_rows.append(cleaned_row)
+
+            if cleaned_rows:  # Only add table if it has content
+                cleaned_tables.append({
+                    "data": cleaned_rows,
+                    "shape": (len(cleaned_rows), len(cleaned_rows[0]) if cleaned_rows else 0),
+                    "confidence": 0.8  # Default confidence for tabula extraction
+                })
+
+        return cleaned_tables
     except Exception as e:
         logger.error(f"Error extracting tables from {file_path}: {e}")
         return []
