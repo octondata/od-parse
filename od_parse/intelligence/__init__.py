@@ -1,20 +1,17 @@
 """
 Document Intelligence Module
 
-This module provides intelligent document analysis and structured extraction
-capabilities for complex documents.
+Smart document classification and analysis for PDF parsing.
 """
 
-from od_parse.intelligence.document_analyzer import (
-    DocumentAnalyzer,
+from od_parse.intelligence.document_classifier import (
     DocumentType,
-    FieldMapping,
-    StructuredField
+    DocumentClassifier,
+    DocumentAnalysis
 )
 
 __all__ = [
-    "DocumentAnalyzer",
-    "DocumentType", 
-    "FieldMapping",
-    "StructuredField"
+    "DocumentType",
+    "DocumentClassifier", 
+    "DocumentAnalysis"
 ]
