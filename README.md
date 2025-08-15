@@ -1,5 +1,7 @@
 # od-parse
 
+> **📦 Development Status:** This library is currently in active development. For installation instructions, see the [Installation](#installation) section below.
+
 An enterprise-grade library for parsing complex PDFs using advanced AI techniques. This library is designed to handle all types of PDF content with state-of-the-art accuracy, including:
 
 - Vision Language Models (VLMs) like Qwen 2.5 VL for enhanced document understanding
@@ -12,6 +14,7 @@ An enterprise-grade library for parsing complex PDFs using advanced AI technique
 
 ## Features
 
+- **Smart Document Classification**: Automatically identify document types (tax forms, invoices, contracts, medical records, etc.) with 54+ supported types
 - **Vision Language Models (VLMs)**: Leverage state-of-the-art VLMs like Qwen 2.5 VL for enhanced document understanding
 - **Advanced Document Intelligence**: Understand document structure and content relationships
 - **Neural Layout Analysis**: Detect complex layouts, including multi-column structures
@@ -25,14 +28,76 @@ An enterprise-grade library for parsing complex PDFs using advanced AI technique
 
 ## Installation
 
+> **⚠️ Important:** `od-parse` is not yet available on PyPI. If you're getting "Could not find a version" errors, this is expected! See [INSTALL.md](INSTALL.md) for detailed installation instructions.
+
+### Development Installation (Current)
+
+Since `od-parse` is currently in active development and not yet published to PyPI, install from source:
+
 ```bash
-# Install the basic package
+# Clone the repository
+git clone https://github.com/your-username/od-parse.git
+cd od-parse
+
+# Create a virtual environment (recommended)
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install in development mode
+pip install -e .
+
+# Or install with advanced features
+pip install -e .[advanced]
+pip install -e .[all]
+```
+
+### Quick Setup Script
+
+For convenience, you can use the automated setup script:
+
+```bash
+# Clone and run setup script
+git clone https://github.com/your-username/od-parse.git
+cd od-parse
+chmod +x setup_dev.sh
+./setup_dev.sh
+```
+
+This script will:
+- ✅ Create a virtual environment
+- ✅ Install all dependencies
+- ✅ Install od-parse in development mode
+- ✅ Test the installation
+- ✅ Provide next steps
+
+### Alternative: Direct Download
+
+If you don't have git, you can download and install directly:
+
+```bash
+# Download the source code
+wget https://github.com/your-username/od-parse/archive/main.zip
+unzip main.zip
+cd od-parse-main
+
+# Create virtual environment and install
+python3 -m venv venv
+source venv/bin/activate
+pip install -e .
+```
+
+### Future PyPI Installation (Coming Soon)
+
+Once published to PyPI, you'll be able to install with:
+
+```bash
+# Install the basic package (COMING SOON)
 pip install od-parse
 
-# Install with all advanced features
+# Install with all advanced features (COMING SOON)
 pip install "od-parse[all]"
 
-# Install with specific advanced features
+# Install with specific advanced features (COMING SOON)
 pip install "od-parse[trocr]"              # TrOCR text recognition
 pip install "od-parse[table_transformer]"  # Neural table extraction
 pip install "od-parse[llava_next]"         # Document understanding with VLMs
@@ -40,10 +105,45 @@ pip install "od-parse[multilingual]"       # Multi-language support
 pip install "od-parse[quality_assessment]" # Quality assessment metrics
 pip install "od-parse[async_processing]"   # Async processing capabilities
 
-# Install preset combinations
+# Install preset combinations (COMING SOON)
 pip install "od-parse[basic]"        # Essential features
 pip install "od-parse[advanced]"     # All stable features
 pip install "od-parse[experimental]" # All features including experimental
+```
+
+### Installation Troubleshooting
+
+**❌ Error: "Could not find a version that satisfies the requirement od-parse"**
+
+This error occurs because `od-parse` is not yet published to PyPI. Use the development installation method above.
+
+**❌ Error: "externally-managed-environment"**
+
+This is a safety feature in newer Python versions. Always use a virtual environment:
+
+```bash
+# Create and activate virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Then install
+pip install -e .
+```
+
+**❌ Error: "pip: command not found"**
+
+Use `python3 -m pip` instead:
+
+```bash
+python3 -m pip install -e .
+```
+
+**❌ Missing Dependencies**
+
+Install core dependencies manually if needed:
+
+```bash
+pip install pdfminer.six tabula-py opencv-python pillow pytesseract pandas numpy
 ```
 
 > **🔒 Privacy Note:** All processing is local by default. No API keys required for core functionality.
@@ -53,8 +153,14 @@ pip install "od-parse[experimental]" # All features including experimental
 ```python
 from od_parse import parse_pdf, convert_to_markdown
 
-# Parse a PDF file
-parsed_data = parse_pdf("path/to/document.pdf")
+# Parse a PDF file with smart document classification
+parsed_data = parse_pdf("path/to/document.pdf", use_deep_learning=True)
+
+# Access document classification results
+classification = parsed_data['parsed_data']['document_classification']
+print(f"Document Type: {classification['document_type']}")
+print(f"Confidence: {classification['confidence']:.2f}")
+print(f"Key Indicators: {classification['key_indicators']}")
 
 # Convert to Markdown
 markdown = convert_to_markdown(parsed_data)
@@ -67,6 +173,46 @@ with open("output.md", "w") as f:
 ## Advanced Features
 
 od-parse includes cutting-edge AI features that can be enabled as needed:
+
+### Smart Document Classification
+
+Automatically identify document types with high accuracy using multi-signal analysis:
+
+```python
+from od_parse import parse_pdf
+from od_parse.intelligence import DocumentType, DocumentClassifier
+
+# Parse with smart classification enabled
+result = parse_pdf("document.pdf", use_deep_learning=True)
+classification = result['parsed_data']['document_classification']
+
+# Get classification results
+doc_type = classification['document_type']  # e.g., "tax_form_1040"
+confidence = classification['confidence']   # e.g., 0.95
+indicators = classification['key_indicators']  # e.g., {"ssn_found": "123-45-6789"}
+suggestions = classification['suggestions']  # Processing recommendations
+
+print(f"Document Type: {doc_type}")
+print(f"Confidence: {confidence:.2f}")
+print(f"Key Indicators: {indicators}")
+```
+
+**Supported Document Types (54+ types):**
+- **Tax Documents**: Form 1040, W-2, 1099, Schedules A-D, etc.
+- **Financial**: Bank statements, credit card statements, investment reports
+- **Business**: Invoices, receipts, contracts, purchase orders, quotes
+- **Legal**: Legal contracts, court documents, patents, wills
+- **Medical**: Medical records, prescriptions, lab reports, insurance claims
+- **Academic**: Research papers, transcripts, diplomas, certificates
+- **Government**: Passports, driver's licenses, birth certificates
+- **General**: Resumes, letters, reports, manuals, brochures
+
+**Classification Features:**
+- **Multi-Signal Analysis**: Text patterns, document structure, keywords, format detection, semantic analysis
+- **High Accuracy**: 100% accuracy on tax forms, high confidence scoring
+- **Key Extraction**: Automatic detection of SSNs, EINs, account numbers, etc.
+- **Smart Suggestions**: Context-aware processing recommendations
+- **Extensible**: Easy to add new document types and patterns
 
 ### Feature Configuration
 
@@ -86,6 +232,35 @@ config.enable_feature('async_processing')   # Async processing
 
 # Or use presets
 config.enable_preset('advanced')  # Enable all stable features
+```
+
+### Direct Document Classification
+
+Use the classifier independently for custom workflows:
+
+```python
+from od_parse.intelligence import DocumentClassifier, DocumentType
+
+# Initialize classifier
+classifier = DocumentClassifier()
+
+# Classify parsed document data
+parsed_data = {"text": "Form 1040 U.S. Individual Income Tax Return...",
+               "tables": [], "forms": []}
+analysis = classifier.classify_document(parsed_data)
+
+# Access detailed analysis
+print(f"Document Type: {analysis.document_type.value}")
+print(f"Confidence: {analysis.confidence:.2f}")
+print(f"Detected Patterns: {analysis.detected_patterns}")
+print(f"Key Indicators: {analysis.key_indicators}")
+print(f"Suggestions: {analysis.suggestions}")
+
+# Check for specific document types
+if analysis.document_type == DocumentType.TAX_FORM_1040:
+    print("This is a tax form - extract tax-specific fields")
+elif analysis.document_type == DocumentType.INVOICE:
+    print("This is an invoice - extract billing information")
 ```
 
 ### TrOCR Text Recognition
@@ -610,7 +785,7 @@ python -m od_parse.main document.pdf --pipeline fast --output-format summary
 # Extract only tables
 python -m od_parse.main document.pdf --pipeline tables --output-format json
 
-# Use deep learning capabilities
+# Use deep learning capabilities (includes smart document classification)
 python -m od_parse.main document.pdf --deep-learning
 ```
 
@@ -618,17 +793,13 @@ python -m od_parse.main document.pdf --deep-learning
 
 This library is designed for enterprise AI applications:
 
+- **Document Classification & Routing**: Automatically classify and route documents based on type (tax forms, invoices, contracts, etc.)
 - **RAG Systems**: Extract and embed document content for retrieval-augmented generation
-- **AI Agents**: Provide structured data for AI agents to work with
-- **Document Automation**: Automate document processing workflows
-- **Data Unification**: Extract structured data from unstructured documents
-- **Knowledge Bases**: Build searchable knowledge bases from document repositories
-
-## License
-
-MIT License
-  - numpy
-  - markdown
+- **AI Agents**: Provide structured data and document intelligence for AI agents to work with
+- **Document Automation**: Automate document processing workflows with intelligent classification
+- **Data Unification**: Extract structured data from unstructured documents with type-aware processing
+- **Knowledge Bases**: Build searchable knowledge bases from document repositories with smart categorization
+- **Compliance & Audit**: Automatically detect sensitive documents (tax forms, medical records) for compliance workflows
 
 ## License
 

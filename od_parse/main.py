@@ -135,20 +135,29 @@ def _enhance_with_advanced_features(parsed_data: Dict[str, Any], file_path: Path
     """Enhance parsed data with advanced features if available."""
     logger = get_logger(__name__)
 
-    # Try to enhance with intelligent document analysis
+    # Try to enhance with smart document classification
     try:
-        from od_parse.intelligence import DocumentAnalyzer
-        analyzer = DocumentAnalyzer()
-        intelligence_result = analyzer.analyze_document(parsed_data)
-        parsed_data["document_intelligence"] = intelligence_result
+        from od_parse.intelligence import DocumentClassifier
+        classifier = DocumentClassifier()
+        classification_result = classifier.classify_document(parsed_data)
 
-        doc_type = intelligence_result.get("document_intelligence", {}).get("document_type", "unknown")
-        confidence = intelligence_result.get("document_intelligence", {}).get("confidence", 0)
-        logger.info(f"Document intelligence completed. Type: {doc_type}, Confidence: {confidence:.2f}")
+        # Convert to dict for JSON serialization
+        parsed_data["document_classification"] = {
+            "document_type": classification_result.document_type.value,
+            "confidence": classification_result.confidence,
+            "detected_patterns": classification_result.detected_patterns,
+            "key_indicators": classification_result.key_indicators,
+            "metadata": classification_result.metadata,
+            "suggestions": classification_result.suggestions
+        }
+
+        logger.info(f"Document classified as: {classification_result.document_type.value} "
+                   f"(confidence: {classification_result.confidence:.2f})")
+
     except ImportError:
-        logger.debug("Document intelligence not available")
+        logger.debug("Document classification not available")
     except Exception as e:
-        logger.warning(f"Document intelligence failed: {e}")
+        logger.warning(f"Document classification failed: {e}")
 
     # Try to enhance with quality assessment
     try:
