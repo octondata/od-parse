@@ -32,23 +32,32 @@ except ImportError:
 
 def parse_pdf(
     file_path: Union[str, Path],
-    output_format: str = "json",
+    output_format: str = "raw",
     output_file: Optional[str] = None,
     pipeline_type: str = "default",
-    use_deep_learning: bool = True
+    use_deep_learning: bool = True,
+    llm_model: Optional[str] = None,
+    require_llm: bool = True,
+    for_embeddings: bool = False
 ) -> Dict[str, Any]:
     """
-    Parse a PDF file using the available parsing capabilities.
+    Parse a PDF file using LLM-powered advanced document understanding.
 
     Args:
         file_path: Path to the PDF file
-        output_format: Format for output (json, markdown, text, summary)
+        output_format: Format for output ('raw', 'json', 'markdown', 'text', 'summary')
         output_file: Path to output file (if None, no file is written)
         pipeline_type: Type of processing to use (default, full, fast, tables, forms, structure)
-        use_deep_learning: Whether to use advanced features (if available)
+        use_deep_learning: Whether to use advanced features (default: True)
+        llm_model: Specific LLM model to use (optional, auto-selects if None)
+        require_llm: Whether to require LLM for processing (default: True)
+        for_embeddings: Whether to optimize output for embedding generation (default: False)
 
     Returns:
-        Dictionary containing parsed content
+        Dictionary containing parsed content optimized for the specified use case
+
+    Raises:
+        ValueError: If require_llm=True but no LLM API keys are available
     """
     import time
     start_time = time.time()
@@ -68,6 +77,32 @@ def parse_pdf(
     logger.info(f"Processing document: {file_path}")
     logger.info(f"Pipeline type: {pipeline_type}")
     logger.info(f"Use advanced features: {use_deep_learning}")
+    logger.info(f"LLM model: {llm_model or 'auto-select'}")
+    logger.info(f"Require LLM: {require_llm}")
+
+    # Check LLM requirement first
+    if require_llm:
+        try:
+            from od_parse.config.llm_config import get_llm_config
+            llm_config = get_llm_config()
+            available_models = llm_config.get_available_models()
+
+            if not available_models:
+                raise ValueError(
+                    "No LLM API keys found. od-parse requires LLM access for document parsing.\n"
+                    "Please set one of the following environment variables:\n"
+                    "  OPENAI_API_KEY for OpenAI models (recommended)\n"
+                    "  ANTHROPIC_API_KEY for Claude models\n"
+                    "  GOOGLE_API_KEY for Gemini models\n"
+                    "  AZURE_OPENAI_API_KEY for Azure OpenAI\n"
+                    "See README.md for detailed setup instructions."
+                )
+
+            logger.info(f"Found {len(available_models)} available LLM models")
+
+        except ImportError:
+            if require_llm:
+                raise ValueError("LLM configuration not available. Please install required dependencies.")
 
     # Configure advanced features if requested
     config = get_advanced_config()
@@ -92,8 +127,11 @@ def parse_pdf(
             "metadata": {"error": str(e)}
         }
 
-    # Enhance with advanced features if available and requested
-    if use_deep_learning:
+    # Enhance with LLM processing if enabled
+    if use_deep_learning and require_llm:
+        parsed_data = _enhance_with_llm_processing(parsed_data, file_path, llm_model)
+    elif use_deep_learning:
+        # Fallback to traditional advanced features
         parsed_data = _enhance_with_advanced_features(parsed_data, file_path, pipeline_type)
 
     # Add processing metadata
@@ -124,11 +162,137 @@ def parse_pdf(
             logger.warning(f"Markdown conversion failed: {e}")
             result["markdown_output"] = f"# {file_path.name}\n\nMarkdown conversion failed: {e}"
 
+    # Optimize output for embeddings if requested
+    if for_embeddings or output_format == "raw":
+        result = _optimize_for_embeddings(result)
+
     # Write output to file if specified
     if output_file:
         _write_output_file(result, output_file, output_format, logger)
 
     return result
+
+
+def _optimize_for_embeddings(result: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Optimize parsed result for embedding generation in document processing pipelines.
+
+    This function extracts and structures the most relevant content for embedding generation,
+    removing metadata and formatting that isn't useful for semantic understanding.
+    """
+    parsed_data = result.get('parsed_data', {})
+
+    # Extract core content for embeddings
+    embedding_optimized = {
+        # Core document content
+        'text': parsed_data.get('text', ''),
+        'document_type': parsed_data.get('document_classification', {}).get('document_type', 'unknown'),
+        'confidence': parsed_data.get('document_classification', {}).get('confidence', 0.0),
+
+        # Structured data from LLM analysis
+        'extracted_data': parsed_data.get('llm_analysis', {}).get('extracted_data', {}),
+
+        # Key entities and indicators
+        'key_indicators': parsed_data.get('document_classification', {}).get('key_indicators', {}),
+
+        # Structured content
+        'tables': _extract_table_content_for_embeddings(parsed_data.get('tables', [])),
+        'forms': _extract_form_content_for_embeddings(parsed_data.get('forms', [])),
+
+        # Metadata for context
+        'processing_metadata': {
+            'document_type': parsed_data.get('document_classification', {}).get('document_type', 'unknown'),
+            'confidence': parsed_data.get('document_classification', {}).get('confidence', 0.0),
+            'text_length': len(parsed_data.get('text', '')),
+            'has_tables': len(parsed_data.get('tables', [])) > 0,
+            'has_forms': len(parsed_data.get('forms', [])) > 0,
+            'llm_processed': parsed_data.get('llm_analysis', {}).get('processing_success', False)
+        }
+    }
+
+    return {'embedding_data': embedding_optimized}
+
+
+def _extract_table_content_for_embeddings(tables: List[Dict]) -> List[Dict]:
+    """Extract table content optimized for embeddings."""
+    embedding_tables = []
+
+    for table in tables:
+        if 'data' in table:
+            # Convert table data to text representation
+            table_text = []
+            for row in table['data']:
+                if isinstance(row, dict):
+                    row_text = ' | '.join([f"{k}: {v}" for k, v in row.items() if v is not None])
+                    if row_text:
+                        table_text.append(row_text)
+
+            embedding_tables.append({
+                'content': '\n'.join(table_text),
+                'row_count': len(table['data']) if 'data' in table else 0
+            })
+
+    return embedding_tables
+
+
+def _extract_form_content_for_embeddings(forms: List[Dict]) -> List[Dict]:
+    """Extract form content optimized for embeddings."""
+    embedding_forms = []
+
+    for form in forms:
+        form_content = {}
+
+        # Extract form fields and values
+        if 'fields' in form:
+            for field in form['fields']:
+                if isinstance(field, dict):
+                    field_name = field.get('name', field.get('label', 'unknown_field'))
+                    field_value = field.get('value', field.get('text', ''))
+                    if field_value:
+                        form_content[field_name] = field_value
+
+        if form_content:
+            embedding_forms.append({
+                'fields': form_content,
+                'field_count': len(form_content)
+            })
+
+    return embedding_forms
+
+
+def _enhance_with_llm_processing(parsed_data: Dict[str, Any], file_path: Path, llm_model: Optional[str] = None) -> Dict[str, Any]:
+    """Enhance parsed data with LLM-powered document understanding."""
+    logger = get_logger(__name__)
+
+    try:
+        from od_parse.llm import LLMDocumentProcessor
+        from pdf2image import convert_from_path
+
+        # Initialize LLM processor
+        processor = LLMDocumentProcessor(model_id=llm_model)
+
+        # Convert PDF to images for vision models
+        try:
+            images = convert_from_path(str(file_path), first_page=1, last_page=3)  # First 3 pages
+            logger.info(f"Converted {len(images)} pages to images for LLM processing")
+        except Exception as e:
+            logger.warning(f"Could not convert PDF to images: {e}")
+            images = None
+
+        # Process with LLM
+        enhanced_data = processor.process_document(parsed_data, images)
+
+        logger.info("LLM processing completed successfully")
+        return enhanced_data
+
+    except ImportError as e:
+        logger.error(f"LLM processing dependencies not available: {e}")
+        logger.info("Falling back to traditional advanced features")
+        return _enhance_with_advanced_features(parsed_data, file_path, "default")
+    except Exception as e:
+        logger.error(f"LLM processing failed: {e}")
+        logger.info("Falling back to traditional advanced features")
+        return _enhance_with_advanced_features(parsed_data, file_path, "default")
 
 
 def _enhance_with_advanced_features(parsed_data: Dict[str, Any], file_path: Path, pipeline_type: str) -> Dict[str, Any]:

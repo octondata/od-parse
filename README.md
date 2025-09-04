@@ -1,36 +1,56 @@
 # od-parse
 
-> **📦 Development Status:** This library is currently in active development. For installation instructions, see the [Installation](#installation) section below.
+> **🤖 LLM-First Document Parser:** od-parse now requires LLM API keys for advanced document understanding. See [Installation](#installation) for setup instructions.
 
-An enterprise-grade library for parsing complex PDFs using advanced AI techniques. This library is designed to handle all types of PDF content with state-of-the-art accuracy, including:
+An enterprise-grade, LLM-powered library for parsing complex PDFs using state-of-the-art language models. This library leverages the power of GPT-4, Claude, and Gemini for superior document understanding, including:
 
-- Vision Language Models (VLMs) like Qwen 2.5 VL for enhanced document understanding
-- Deep learning-based text extraction and layout analysis
-- Transformer-based OCR for handwritten content
-- Neural table detection and extraction
-- Form element understanding (radio buttons, checkboxes, text fields)
-- Semantic structure extraction and document intelligence
-- Multi-column layout detection
+- **LLM-Powered Analysis**: GPT-4, Claude 3.5 Sonnet, Gemini 1.5 Pro for complex document understanding
+- **Vision-Language Models**: Advanced multimodal AI for visual document analysis
+- **Intelligent Document Classification**: 54+ document types with context-aware processing
+- **Complex Layout Understanding**: Multi-column, tables, forms, handwriting recognition
+- **Domain-Specific Processing**: Tax forms, legal contracts, medical records, financial statements
+- **Structured Data Extraction**: JSON output with high accuracy and validation
+- **Cost-Optimized Model Selection**: Automatic model selection based on document complexity
 
 ## Features
 
-- **Smart Document Classification**: Automatically identify document types (tax forms, invoices, contracts, medical records, etc.) with 54+ supported types
-- **Vision Language Models (VLMs)**: Leverage state-of-the-art VLMs like Qwen 2.5 VL for enhanced document understanding
-- **Advanced Document Intelligence**: Understand document structure and content relationships
-- **Neural Layout Analysis**: Detect complex layouts, including multi-column structures
-- **Deep Learning Table Extraction**: Extract tables even without explicit borders
-- **Form Understanding**: Detect and interpret various form elements
-- **Transformer-based OCR**: Extract handwritten text with state-of-the-art accuracy
-- **Semantic Structure Analysis**: Identify hierarchical structures and relationships
-- **Flexible Configuration Options**: Customize parsing capabilities based on your needs
-- **Enterprise Integrations**: Connect with databases, APIs, and vector stores
-- **Markdown Generation**: Convert parsed content into clean Markdown format
+- **🤖 LLM-Powered Document Understanding**: GPT-4, Claude 3.5 Sonnet, Gemini 1.5 Pro for complex document analysis
+- **🎯 Smart Document Classification**: Automatically identify 54+ document types with intelligent routing
+- **👁️ Vision-Language Processing**: Multimodal AI for visual document understanding and layout analysis
+- **📊 Domain-Specific Extraction**: Specialized processing for tax forms, legal contracts, medical records, financial statements
+- **🏗️ Structured Data Output**: High-accuracy JSON extraction with validation and confidence scoring
+- **💰 Cost-Optimized Processing**: Automatic model selection based on document complexity and cost
+- **🔄 Intelligent Fallbacks**: Graceful degradation when LLM services are unavailable
+- **🌍 Multi-Provider Support**: OpenAI, Anthropic, Google, Azure OpenAI, and local models
+- **📈 Enterprise-Ready**: Batch processing, API integrations, and scalable architecture
+- **🔒 Privacy-Conscious**: Support for local models and on-premises deployment
 
 ## Installation
 
+> **🤖 LLM Required:** od-parse now requires LLM API keys for document processing. Set up your API keys before installation.
+
 > **⚠️ Important:** `od-parse` is not yet available on PyPI. If you're getting "Could not find a version" errors, this is expected! See [INSTALL.md](INSTALL.md) for detailed installation instructions.
 
-### Development Installation (Current)
+### Step 1: Set Up LLM API Keys
+
+Choose one or more LLM providers and set up your API keys:
+
+```bash
+# OpenAI (Recommended for best performance)
+export OPENAI_API_KEY="your-openai-api-key"
+
+# Anthropic Claude (Excellent for complex documents)
+export ANTHROPIC_API_KEY="your-anthropic-api-key"
+
+# Google Gemini (Great for large documents)
+export GOOGLE_API_KEY="your-google-api-key"
+
+# Azure OpenAI (Enterprise option)
+export AZURE_OPENAI_API_KEY="your-azure-key"
+export AZURE_OPENAI_ENDPOINT="your-azure-endpoint"
+```
+
+### Step 2: Development Installation
 
 Since `od-parse` is currently in active development and not yet published to PyPI, install from source:
 
@@ -113,6 +133,19 @@ pip install "od-parse[experimental]" # All features including experimental
 
 ### Installation Troubleshooting
 
+**❌ Error: "No LLM API keys found"**
+
+This is the most common error. od-parse requires LLM access:
+
+```bash
+# Set at least one API key
+export OPENAI_API_KEY="your-key-here"
+# OR
+export ANTHROPIC_API_KEY="your-key-here"
+# OR
+export GOOGLE_API_KEY="your-key-here"
+```
+
 **❌ Error: "Could not find a version that satisfies the requirement od-parse"**
 
 This error occurs because `od-parse` is not yet published to PyPI. Use the development installation method above.
@@ -143,32 +176,93 @@ python3 -m pip install -e .
 Install core dependencies manually if needed:
 
 ```bash
-pip install pdfminer.six tabula-py opencv-python pillow pytesseract pandas numpy
+pip install pdfminer.six tabula-py opencv-python pillow pytesseract pandas numpy openai anthropic google-generativeai pdf2image
 ```
 
-> **🔒 Privacy Note:** All processing is local by default. No API keys required for core functionality.
+> **🤖 LLM-First Approach:** od-parse now requires LLM API keys for advanced document understanding. Local processing is available for basic extraction only.
 
 ## Quick Start
 
 ```python
+import os
 from od_parse import parse_pdf, convert_to_markdown
 
-# Parse a PDF file with smart document classification
-parsed_data = parse_pdf("path/to/document.pdf", use_deep_learning=True)
+# Set your LLM API key (never commit actual keys!)
+os.environ["OPENAI_API_KEY"] = "your-api-key-here"
 
-# Access document classification results
-classification = parsed_data['parsed_data']['document_classification']
+# Parse a PDF with LLM-powered understanding
+result = parse_pdf("path/to/document.pdf")
+
+# Access LLM analysis results
+llm_analysis = result['parsed_data']['llm_analysis']
+print(f"Extracted Data: {llm_analysis['extracted_data']}")
+print(f"Model Used: {llm_analysis['model_info']['model']}")
+print(f"Processing Cost: ${llm_analysis['model_info']['cost_estimate']:.4f}")
+
+# Access document classification
+classification = result['parsed_data']['document_classification']
 print(f"Document Type: {classification['document_type']}")
 print(f"Confidence: {classification['confidence']:.2f}")
-print(f"Key Indicators: {classification['key_indicators']}")
 
 # Convert to Markdown
-markdown = convert_to_markdown(parsed_data)
+markdown = convert_to_markdown(result)
 
-# Save to file
-with open("output.md", "w") as f:
-    f.write(markdown)
+# Save structured output
+with open("output.json", "w") as f:
+    json.dump(llm_analysis['extracted_data'], f, indent=2)
 ```
+
+## 🔒 Security & API Key Management
+
+**NEVER commit API keys to version control!** od-parse provides secure configuration management:
+
+### **Method 1: Environment File (Recommended)**
+
+1. Copy the environment template:
+```bash
+cp .env.example .env
+```
+
+2. Edit `.env` with your actual API keys:
+```bash
+# .env file (never commit this!)
+OPENAI_API_KEY=your-actual-openai-key-here
+GOOGLE_API_KEY=your-actual-google-key-here
+ANTHROPIC_API_KEY=your-actual-anthropic-key-here
+```
+
+### **Method 2: Secure Configuration in Code**
+
+```python
+from od_parse.config.env_config import get_api_key, setup_secure_environment
+
+# Auto-loads from .env file
+setup_secure_environment()
+
+# Get API keys securely (no hardcoding!)
+openai_key = get_api_key('openai')
+google_key = get_api_key('google')
+
+# Use in your code without exposing keys
+result = parse_pdf("document.pdf")  # Uses configured keys automatically
+```
+
+### **Method 3: Environment Variables**
+
+```bash
+export OPENAI_API_KEY="your-api-key-here"
+export GOOGLE_API_KEY="your-api-key-here"
+export ANTHROPIC_API_KEY="your-api-key-here"
+```
+
+### **Security Best Practices**
+
+- ✅ Use `.env` files (included in `.gitignore`)
+- ✅ Use environment variables in production
+- ✅ Use the secure configuration helper
+- ❌ Never hardcode API keys in source code
+- ❌ Never commit `.env` files to git
+- ❌ Never share API keys in documentation
 
 ## Advanced Features
 
