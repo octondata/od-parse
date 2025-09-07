@@ -45,6 +45,10 @@ pip install --upgrade pip
 echo "📚 Installing core dependencies..."
 pip install pdfminer.six tabula-py opencv-python pillow pytesseract pandas numpy
 
+# Install LLM dependencies
+echo "🤖 Installing LLM dependencies..."
+pip install openai anthropic google-generativeai pdf2image
+
 # Install od-parse in development mode
 echo "🔨 Installing od-parse in development mode..."
 pip install -e .
@@ -69,11 +73,20 @@ python -c "from od_parse.main import parse_pdf; print('✅ Main parser available
 echo ""
 echo "🎉 Installation completed successfully!"
 echo ""
+echo "🔑 IMPORTANT: Set up your LLM API keys!"
+echo "od-parse now requires LLM access for document parsing."
+echo ""
+echo "Choose one or more providers:"
+echo "  export OPENAI_API_KEY='your-openai-key'        # Recommended"
+echo "  export ANTHROPIC_API_KEY='your-anthropic-key'  # Great for complex docs"
+echo "  export GOOGLE_API_KEY='your-google-key'        # Good for large docs"
+echo ""
 echo "📋 Next steps:"
-echo "1. Activate the virtual environment: source venv/bin/activate"
-echo "2. Test with a PDF: python -c \"from od_parse.main import parse_pdf; print('Ready to parse!')\""
-echo "3. See README.md for usage examples"
+echo "1. Set up API keys (see above)"
+echo "2. Activate the virtual environment: source venv/bin/activate"
+echo "3. Test with a PDF: python test_llm_parsing.py"
+echo "4. See README.md for usage examples"
 echo ""
 echo "💡 To deactivate the virtual environment later, run: deactivate"
 echo ""
-echo "🚀 Happy parsing!"
+echo "🚀 Happy parsing with LLM power!"
