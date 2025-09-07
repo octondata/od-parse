@@ -31,3 +31,46 @@ Thumbs.db
 
 # Project specific
 *_images/
+
+# Security - Never commit API keys or secrets
+.env
+.env.local
+.env.*.local
+*.key
+*_key.txt
+*_keys.txt
+secrets.json
+config_local.py
+
+# Debug/Test Scripts - Don't commit temporary debugging files
+test_*.py
+debug_*.py
+demo_*.py
+showcase_*.py
+*_test.py
+*_demo.py
+*_debug.py
+comprehensive_*.py
+embedding_*.py
+process_*.py
+
+# Processing Results - Don't commit large result files
+*_results/
+*_analysis/
+*_processing_results/
+comprehensive_analysis_results/
+gemini_processing_results/
+*.json
+!setup.json
+!package.json
+!requirements.json
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+*.temp
+*_temp.*
+
+# Documentation that contains sensitive info
+PROCESSING_RESULTS_SUMMARY.md

@@ -1,8 +1,13 @@
 # Installation Guide for od-parse
 
-## ⚠️ Important Notice
+## 🤖 LLM-First Document Parser
 
-**od-parse is currently in development and NOT available on PyPI yet.**
+**od-parse now requires LLM API keys for advanced document understanding.**
+
+## ⚠️ Important Notices
+
+1. **od-parse is currently in development and NOT available on PyPI yet.**
+2. **LLM API keys are required** for document processing.
 
 If you're getting this error:
 ```
@@ -11,9 +16,37 @@ ERROR: Could not find a version that satisfies the requirement od-parse
 
 This is expected! Follow the development installation instructions below.
 
+If you're getting this error:
+```
+ERROR: No LLM API keys found
+```
+
+You need to set up LLM API keys first (see Step 1 below).
+
 ## 🚀 Development Installation
 
-### Method 1: Git Clone (Recommended)
+### Step 1: Set Up LLM API Keys (REQUIRED)
+
+Choose one or more LLM providers and set up your API keys:
+
+```bash
+# OpenAI (Recommended for best performance)
+export OPENAI_API_KEY="your-openai-api-key"
+
+# Anthropic Claude (Excellent for complex documents)
+export ANTHROPIC_API_KEY="your-anthropic-api-key"
+
+# Google Gemini (Great for large documents with long context)
+export GOOGLE_API_KEY="your-google-api-key"
+
+# Azure OpenAI (Enterprise option)
+export AZURE_OPENAI_API_KEY="your-azure-key"
+export AZURE_OPENAI_ENDPOINT="your-azure-endpoint"
+```
+
+### Step 2: Install od-parse
+
+#### Method 1: Git Clone (Recommended)
 
 ```bash
 # 1. Clone the repository
@@ -34,6 +67,9 @@ pip install -e .
 
 # 5. Test installation
 python -c "import od_parse; print('✅ od-parse installed successfully!')"
+
+# 6. Test LLM functionality
+python test_llm_parsing.py
 ```
 
 ### Method 2: Direct Download
