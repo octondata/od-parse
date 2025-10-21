@@ -17,6 +17,7 @@ import pdf2image
 import tabula
 import cv2
 import numpy as np
+import time
 
 from od_parse.ocr import extract_handwritten_content
 from od_parse.utils.file_utils import validate_file
@@ -52,26 +53,47 @@ def parse_pdf(file_path: Union[str, Path], **kwargs) -> Dict[str, Any]:
         from pdfminer.pdfpage import PDFPage
         with open(file_path, 'rb') as file:
             page_count = len(list(PDFPage.get_pages(file)))
+            logger.info(f"Page count: {page_count}")
     except Exception as e:
         logger.warning(f"Could not determine page count: {e}")
         page_count = "unknown"
 
     # Extract content
+    start_time = time.time()
     text = extract_text(file_path)
+    end_time = time.time()
+    logger.info(f"Text extracted: {text}")
+    logger.info(f"Text extraction time: {end_time - start_time:.2f} seconds")
+    start_time = time.time()
     images = extract_images(file_path)
+    end_time = time.time()
+    logger.info(f"Images extracted: {len(images)}")
+    logger.info(f"Images extraction time: {end_time - start_time:.2f} seconds")
+    start_time = time.time()
     tables = extract_tables(file_path)
+    end_time = time.time()
+    logger.info(f"Tables extracted: {len(tables)}")
+    logger.info(f"Tables extraction time: {end_time - start_time:.2f} seconds")
+    start_time = time.time()
     forms = extract_forms(file_path)
+    end_time = time.time()
+    logger.info(f"Forms extracted: {len(forms)}")
+    logger.info(f"Forms extraction time: {end_time - start_time:.2f} seconds")
 
     # Process images for handwritten content
     handwritten_content = []
-    for img_path in images:
-        try:
-            content = extract_handwritten_content(img_path)
-            if content:
-                handwritten_content.append(content)
-        except Exception as e:
-            logger.error(f"Error extracting handwritten content from {img_path}: {e}")
-
+    if False:
+        start_time = time.time()
+        for img_path in images:
+            try:
+                content = extract_handwritten_content(img_path)
+                if content:
+                    handwritten_content.append(content)
+            except Exception as e:
+                logger.error(f"Error extracting handwritten content from {img_path}: {e}")
+        end_time = time.time()
+        logger.info(f"Handwritten content extracted: {len(handwritten_content)}")
+        logger.info(f"Handwritten content extraction time: {end_time - start_time:.2f} seconds")
     # Create metadata
     file_stats = Path(file_path).stat()
     metadata = {
@@ -85,6 +107,7 @@ def parse_pdf(file_path: Union[str, Path], **kwargs) -> Dict[str, Any]:
         "images_found": len(images),
         "handwritten_items_found": len(handwritten_content)
     }
+    logger.info(f"Metadata: {metadata}")
 
     return {
         'text': text,

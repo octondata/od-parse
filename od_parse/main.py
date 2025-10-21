@@ -38,7 +38,7 @@ def parse_pdf(
     use_deep_learning: bool = True,
     llm_model: Optional[str] = None,
     require_llm: bool = True,
-    for_embeddings: bool = False
+    for_embeddings: bool = False,
 ) -> Dict[str, Any]:
     """
     Parse a PDF file using LLM-powered advanced document understanding.
@@ -153,14 +153,21 @@ def parse_pdf(
         "summary": _create_summary(parsed_data, file_path, processing_time)
     }
 
-    # Convert to requested format
+    # Convert to markdown if requested
     if output_format == "markdown":
         try:
+            logger.info("Starting markdown conversion...")
+            logger.info(f"Parsed data keys: {parsed_data.keys()}")
+            if 'text' in parsed_data:
+                logger.info(f"Text length: {len(parsed_data['text'])}")
             markdown_content = convert_to_markdown(parsed_data)
             result["markdown_output"] = markdown_content
+            logger.info("Markdown conversion completed successfully")
         except Exception as e:
-            logger.warning(f"Markdown conversion failed: {e}")
-            result["markdown_output"] = f"# {file_path.name}\n\nMarkdown conversion failed: {e}"
+            import traceback
+            error_details = traceback.format_exc()
+            logger.error(f"Error converting to markdown: {e}\n{error_details}")
+            result["markdown_output"] = f"# {file_path.name}\n\nMarkdown conversion failed: {e}\n\nError details have been logged.\n\n{error_details}"
 
     # Optimize output for embeddings if requested
     if for_embeddings or output_format == "raw":
@@ -515,6 +522,8 @@ def main():
         default="default",
         help="Type of pipeline to use"
     )
+
+   
     
     parser.add_argument(
         "--deep-learning",
@@ -544,16 +553,20 @@ def main():
             pipeline_type=args.pipeline,
             use_deep_learning=args.deep_learning
         )
-        
+        print("got the result", result)
+        print("otput format is ", args.output_format)
         # Print summary if no output file
         if not args.output_file:
             if args.output_format == "json":
                 # Clean the result for valid JSON output
+                print("json output")
                 cleaned_result = _clean_for_json(result)
                 print(json.dumps(cleaned_result, indent=2, ensure_ascii=False))
             elif args.output_format == "markdown":
+                print("markdown output")
                 print(result.get("markdown_output", ""))
             elif args.output_format == "summary":
+                print("summary output")
                 summary = result.get("summary", {})
                 print("\nDOCUMENT SUMMARY")
                 print("================")
