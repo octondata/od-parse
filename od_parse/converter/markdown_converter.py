@@ -52,9 +52,17 @@ def convert_to_markdown(parsed_data: Dict[str, Any], **kwargs) -> str:
     if include_tables and 'tables' in parsed_data and parsed_data['tables']:
         markdown.append("## Tables\n")
         for i, table in enumerate(parsed_data['tables']):
-            markdown.append(f"### Table {i+1}\n")
-            markdown.append(format_table(table))
-            markdown.append("\n")
+            try:
+                markdown.append(f"### Table {i+1}\n")
+                formatted_table = format_table(table)
+                if not formatted_table:
+                    markdown.append("*No table data could be extracted*\n")
+                else:
+                    markdown.append(formatted_table)
+                markdown.append("\n")
+            except Exception as e:
+                logger.error(f"Error processing table {i+1}: {e}")
+                markdown.append(f"*Error processing table {i+1}: {str(e)}*\n\n")
     
     # Add form elements
     if include_forms and 'forms' in parsed_data and parsed_data['forms']:
@@ -109,40 +117,57 @@ def format_text_content(text: str) -> str:
     
     return '\n\n'.join(formatted_paragraphs)
 
-def format_table(table_data: List[Dict[str, Any]]) -> str:
+def format_table(table_data: Union[List[Dict[str, Any]], List[List[Any]]]) -> str:
     """
     Format table data as Markdown table.
     
     Args:
-        table_data: Table data as a list of dictionaries
+        table_data: Table data which can be:
+                   - List of dictionaries (each dict represents a row)
+                   - 2D list (list of lists)
+                   - pandas DataFrame (handled by tabula)
     
     Returns:
-        Markdown formatted table
+        Markdown formatted table or error message
     """
     if not table_data:
-        return "*No table data available*"
+        return "No table data available"
     
-    # Get column headers
-    headers = list(table_data[0].keys())
+    try:
+        # Handle pandas DataFrame (from tabula)
+        if hasattr(table_data, 'to_dict'):
+            table_data = table_data.fillna('').to_dict('records')
+        
+        # Handle different table formats
+        if isinstance(table_data, list) and table_data and hasattr(table_data[0], 'keys'):
+            # List of dictionaries format
+            headers = list(table_data[0].keys())
+            rows = []
+            
+            for row in table_data:
+                rows.append([str(row.get(header, "")) for header in headers])
+                
+        elif isinstance(table_data, list) and table_data and isinstance(table_data[0], (list, tuple)):
+            # 2D list format
+            headers = [f"Column {i+1}" for i in range(len(table_data[0]))]
+            rows = [[str(cell) for cell in row] for row in table_data]
+        else:
+            return "Unsupported table format"
+        
+        # Create markdown table
+        markdown_table = "| " + " | ".join(map(str, headers)) + " |\n"
+        markdown_table += "| " + " | ".join(["---"] * len(headers)) + " |\n"
+        
+        for row in rows:
+            # Ensure the row has the same number of columns as headers
+            row = row + [""] * (len(headers) - len(row)) if len(row) < len(headers) else row[:len(headers)]
+            markdown_table += "| " + " | ".join(map(str, row)) + " |\n"
+        
+        return markdown_table
     
-    # Create table header
-    markdown_table = "| " + " | ".join(headers) + " |\n"
-    markdown_table += "| " + " | ".join(["---"] * len(headers)) + " |\n"
-    
-    # Add table rows
-    for row in table_data:
-        row_values = []
-        for header in headers:
-            value = row.get(header, "")
-            # Convert non-string values to strings
-            if not isinstance(value, str):
-                value = str(value)
-            # Escape pipe characters in cell values
-            value = value.replace("|", "\\|")
-            row_values.append(value)
-        markdown_table += "| " + " | ".join(row_values) + " |\n"
-    
-    return markdown_table
+    except Exception as e:
+        logger.error(f"Error formatting table: {e}")
+        return f"Error formatting table: {str(e)}"
 
 def format_form_element(form_data: Dict[str, Any]) -> str:
     """
