@@ -13,9 +13,11 @@ from pdfminer.layout import LAParams, LTTextContainer, LTImage, LTFigure
 from pdfminer.converter import PDFPageAggregator
 from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
 from pdfminer.pdfpage import PDFPage
+from pdfminer.pdfpage import PDFPage
 import pdf2image
 import cv2
 import numpy as np
+import re
 import time
 
 # Try to import pdfplumber for table extraction (pure Python, no Java needed)
@@ -34,76 +36,59 @@ from od_parse.utils.text_normalizer import normalize_ocr_spacing
 logger = get_logger(__name__)
 
 
-def calculate_alpha_ratio(text: str) -> float:
-    """
-    Calculate the ratio of alphabetic characters in text.
-
-    Args:
-        text: Input text
-
-    Returns:
-        Ratio of alphabetic characters (0.0 to 1.0)
-    """
-    if not text:
-        return 0.0
-
-    alpha_count = sum(c.isalpha() for c in text)
-    return alpha_count / len(text)
+MIN_TEXT_LENGTH = 10
+MIN_ALPHA_RATIO = 0.5
+MIN_VALID_WORDS = 3
+MAX_GARBAGE_RATIO = 0.1
+VALID_WORD_REGEX = re.compile(r'[a-zA-Z]{3,}')
+GARBAGE_CHARS = frozenset('<>;()[]{}@#$%^&*')
 
 
 def is_readable_text(text: str) -> bool:
     """
-    Check if text appears to be readable (not garbage).
+    Checks if text appears to be readable using several heuristics.
 
-    Uses multiple heuristics:
-    1. Alpha ratio > 0.5
-    2. Has common English words (I-94, NAME, DATE, etc.)
-    3. Has valid word patterns (words with 3+ consecutive letters)
-    4. Low ratio of special characters like <, >, ;, (, )
+    This function assesses readability based on:
+    1. A minimum length.
+    2. A high ratio of alphabetic characters.
+    3. The presence of multiple words with 3+ letters.
+    4. A low ratio of "garbage" special characters.
 
     Args:
-        text: Input text
+        text: The input string to analyze.
 
     Returns:
-        True if text appears readable, False if garbage
+        True if the text is deemed readable, False otherwise.
     """
-    if not text or len(text) < 10:
+    if not text or len(text) < MIN_TEXT_LENGTH:
         return False
 
-    # Check 1: Alpha ratio
-    alpha_ratio = calculate_alpha_ratio(text)
-    if alpha_ratio < 0.5:
+    text_len = len(text)
+    alpha_count = 0
+    garbage_count = 0
+
+    for char in text:
+        if char.isalpha():
+            alpha_count += 1
+        elif char in GARBAGE_CHARS:
+            garbage_count += 1
+
+    # Heuristic 1: Alpha character ratio
+    alpha_ratio = alpha_count / text_len
+    if alpha_ratio < MIN_ALPHA_RATIO:
         return False
 
-    # Check 2: Common I-94 form words (case-insensitive)
-    common_words = [
-        'name', 'date', 'birth', 'country', 'passport', 'visa',
-        'arrival', 'departure', 'admission', 'class', 'number',
-        'i-94', 'i94', 'record', 'issued', 'expires', 'until'
-    ]
-    text_lower = text.lower()
-    has_common_words = any(word in text_lower for word in common_words)
+    # Heuristic 2: Garbage character ratio
+    garbage_ratio = garbage_count / text_len
+    if garbage_ratio > MAX_GARBAGE_RATIO:
+        return False
 
-    # Check 3: Valid word patterns (3+ consecutive letters)
-    import re
-    valid_words = re.findall(r'[a-zA-Z]{3,}', text)
-    has_valid_words = len(valid_words) >= 3
+    # Heuristic 3: Presence of valid words
+    # This check is more expensive, so it's performed after cheaper checks.
+    if len(VALID_WORD_REGEX.findall(text)) < MIN_VALID_WORDS:
+        return False
 
-    # Check 4: Low ratio of garbage characters
-    garbage_chars = '<>;()[]{}@#$%^&*'
-    garbage_count = sum(1 for c in text if c in garbage_chars)
-    garbage_ratio = garbage_count / len(text) if len(text) > 0 else 0
-    low_garbage = garbage_ratio < 0.1  # Less than 10% garbage chars
-
-    # Text is readable if it passes most checks
-    score = sum([
-        alpha_ratio > 0.5,
-        has_common_words,
-        has_valid_words,
-        low_garbage
-    ])
-
-    return score >= 3  # Pass if 3 out of 4 checks pass
+    return True
 
 
 def parse_pdf(file_path: Union[str, Path], use_ocr: bool = True, **kwargs) -> Dict[str, Any]:
@@ -118,80 +103,42 @@ def parse_pdf(file_path: Union[str, Path], use_ocr: bool = True, **kwargs) -> Di
         **kwargs: Additional arguments for parsing
 
     Returns:
-        Dictionary containing extracted content:
-        {
-            'text': extracted text content,
-            'images': list of extracted images,
-            'tables': list of extracted tables,
-            'forms': list of extracted form elements,
-            'handwritten_content': list of extracted handwritten content,
-            'metadata': document metadata
-        }
+        Dictionary containing extracted content
     """
     file_path = validate_file(file_path, extension='.pdf')
-
     logger.info(f"Parsing PDF file: {file_path}")
 
     # Get document metadata
+    page_count = "unknown"
     try:
-        from pdfminer.pdfpage import PDFPage
         with open(file_path, 'rb') as file:
             page_count = len(list(PDFPage.get_pages(file)))
             logger.info(f"Page count: {page_count}")
     except Exception as e:
         logger.warning(f"Could not determine page count: {e}")
-        page_count = "unknown"
 
-    # Extract content
-    start_time = time.time()
-    text = extract_text(file_path, use_ocr_fallback=use_ocr)
-    end_time = time.time()
-    logger.info(f"Text extracted: {len(text)} characters")
-    logger.info(f"Text extraction time: {end_time - start_time:.2f} seconds")
-    start_time = time.time()
-    images = extract_images(file_path)
-    end_time = time.time()
-    logger.info(f"Images extracted: {len(images)}")
-    logger.info(f"Images extraction time: {end_time - start_time:.2f} seconds")
-    start_time = time.time()
-    tables = extract_tables(file_path)
-    end_time = time.time()
-    logger.info(f"Tables extracted: {len(tables)}")
-    logger.info(f"Tables extraction time: {end_time - start_time:.2f} seconds")
-    start_time = time.time()
-    forms = extract_forms(file_path)
-    end_time = time.time()
-    logger.info(f"Forms extracted: {len(forms)}")
-    logger.info(f"Forms extraction time: {end_time - start_time:.2f} seconds")
+    # Run extraction steps
+    text = _run_extraction_step("Text", extract_text, file_path, use_ocr_fallback=use_ocr)
+    images = _run_extraction_step("Images", extract_images, file_path)
+    tables = _run_extraction_step("Tables", extract_tables, file_path)
+    forms = _run_extraction_step("Forms", extract_forms, file_path)
 
-    # Process images for handwritten content
+    # Handwritten content extraction is currently disabled
     handwritten_content = []
-    if False:
-        start_time = time.time()
-        for img_path in images:
-            try:
-                content = extract_handwritten_content(img_path)
-                if content:
-                    handwritten_content.append(content)
-            except Exception as e:
-                logger.error(f"Error extracting handwritten content from {img_path}: {e}")
-        end_time = time.time()
-        logger.info(f"Handwritten content extracted: {len(handwritten_content)}")
-        logger.info(f"Handwritten content extraction time: {end_time - start_time:.2f} seconds")
+
     # Create metadata
     file_stats = Path(file_path).stat()
     metadata = {
         "file_name": Path(file_path).name,
         "file_size": file_stats.st_size,
         "page_count": page_count,
-        "extraction_method": "pdfminer + tabula",
-        "text_length": len(text) if text else 0,
+        "extraction_method": "pdfminer + pdfplumber",
+        "text_length": len(text),
         "tables_found": len(tables),
         "forms_found": len(forms),
         "images_found": len(images),
         "handwritten_items_found": len(handwritten_content)
     }
-    logger.info(f"Metadata: {metadata}")
 
     return {
         'text': text,
@@ -201,6 +148,22 @@ def parse_pdf(file_path: Union[str, Path], use_ocr: bool = True, **kwargs) -> Di
         'handwritten_content': handwritten_content,
         'metadata': metadata
     }
+
+
+def _run_extraction_step(step_name: str, extraction_func, *args, **kwargs):
+    """Run a single extraction step, timing it and logging the result."""
+    start_time = time.time()
+    try:
+        result = extraction_func(*args, **kwargs)
+        elapsed_time = time.time() - start_time
+        result_count = len(result) if isinstance(result, (list, str)) else 0
+        logger.info(f"✅ {step_name} extraction completed: {result_count} items in {elapsed_time:.2f}s")
+        return result
+    except Exception as e:
+        elapsed_time = time.time() - start_time
+        logger.error(f"✗ {step_name} extraction failed after {elapsed_time:.2f}s: {e}")
+        # Return a default value based on expected type
+        return "" if "text" in step_name.lower() else []
 
 def extract_text(file_path: Union[str, Path], use_ocr_fallback: bool = True) -> str:
     """
