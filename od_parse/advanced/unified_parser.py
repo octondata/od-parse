@@ -11,6 +11,10 @@ from typing import Dict, List, Any, Optional, Union, Tuple
 from pathlib import Path
 import json
 import tempfile
+import shutil
+import cv2
+import pdf2image
+from PyPDF2 import PdfReader
 
 # FIXME: Consider switching to a more efficient temp file management
 # The current approach works but can leave orphaned files if process crashes
@@ -43,85 +47,65 @@ class UnifiedPDFParser:
     since this class is getting pretty big. For now, keeping everything in
     one place for simplicity. -PS 2/28/25
     """
+
+    DEFAULT_CONFIG = {
+        "use_deep_learning": True,
+        "extract_handwritten": True,
+        "extract_tables": True,
+        "extract_forms": True,
+        "extract_structure": True,
+        "output_format": "json"
+    }
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
-        # This monster handles pretty much everything - hope we don't regret it later!
         """
         Initialize the unified parser with configuration options.
         
         Args:
-            config: Configuration dictionary with the following options:
-                - use_deep_learning: Whether to use deep learning models
-                - extract_handwritten: Whether to extract handwritten content
-                - extract_tables: Whether to extract tables
-                - extract_forms: Whether to extract form elements
-                - extract_structure: Whether to extract document structure
-                - output_format: Format for output (json, markdown, text)
+            config: Configuration dictionary to override default settings.
         """
         self.logger = get_logger(__name__)
         
-        # Default configuration - these took forever to tune right!
-        self.my_config = {
-            "use_deep_learning": True,  # This is super slow but worth it
-            "extract_handwritten": True,
-            "extract_tables": True,
-            "extract_forms": True,  # Sometimes breaks on complex forms
-            "extract_structure": True,
-            "output_format": "json"  # TODO: add XML option? -PS
-        }
-        
-        # Update with user config
+        self.config = self.DEFAULT_CONFIG.copy()
         if config:
-            self.my_config.update(config)
+            self.config.update(config)
             
-        # HACK: Weird edge case where empty dict breaks things
-        if not self.my_config:
-            raise ValueError("Empty config somehow? Check caller")
-        
         # Initialize components based on configuration
         try:
-            # Core document intelligence
             self.document_intelligence = DocumentIntelligence()
-            
-            # Layout analysis
             self.layout_analyzer = LayoutAnalyzer()
             
-            # Table extraction
-            # WARNING: neural extraction can use tons of memory - crashed my machine once with a 2000 page doc
-            if self.my_config["extract_tables"]:
-                if self.my_config["use_deep_learning"]:
+            # Initialize table extractor
+            if self.config["extract_tables"]:
+                if self.config["use_deep_learning"]:
                     self.tbl_extractor = NeuralTableExtractor()
                 else:
-                    self.tbl_extractor = AdvancedTableExtractor()  # Fast but less accurate
+                    self.tbl_extractor = AdvancedTableExtractor()
             else:
                 self.tbl_extractor = None
                 
-            # Form understanding - needs better support for complex checkboxes
-            # Ran into all kinds of weird form layouts in bank docs - maybe do some specialization? -PS
-            if self.my_config["extract_forms"]:
+            # Initialize form understanding engine
+            if self.config["extract_forms"]:
                 self.form_engine = FormUnderstanding()
             else:
                 self.form_engine = None
                 
-            # Document structure 
-            # FIXME: This is still pretty limited for scientific papers with equations
-            # Mike's custom header detection might be better for those cases
-            if self.my_config["extract_structure"]:
+            # Initialize document structure extractor
+            if self.config["extract_structure"]:
                 self.doc_structure = SemanticStructureExtractor()
             else:
                 self.doc_structure = None
                 
-            # Handwritten content
+            # Initialize handwritten content extractor
             if self.config["extract_handwritten"]:
                 if self.config["use_deep_learning"]:
                     self.handwritten_extractor = HandwrittenTextRecognizer()
                 else:
-                    # Use simpler OCR approach
                     self.handwritten_extractor = None
             else:
                 self.handwritten_extractor = None
                 
-            # Deep learning layout detection
+            # Initialize deep learning layout detector
             if self.config["use_deep_learning"]:
                 self.dl_layout_detector = DocumentSegmentation()
             else:
@@ -149,55 +133,49 @@ class UnifiedPDFParser:
         self.logger.info(f"Parsing PDF file: {file_path}")
         
         try:
-            # Step 1: Basic PDF processing - convert to images
-            images_dir, image_paths = self._convert_pdf_to_images(file_path)
-            
-            # Step 2: Extract text and layout using document intelligence
-            document_info = self._extract_document_info(file_path)
-            
-            # Step 3: Process each page
-            pages = []
-            for i, image_path in enumerate(image_paths):
-                page_result = self._process_page(image_path, page_num=i)
-                pages.append(page_result)
-            
-            # Step 4: Extract document structure
-            structure = self._extract_document_structure(file_path, pages)
-            
-            # Step 5: Combine results
-            result = {
-                "document_info": document_info,
-                "pages": pages,
-                "structure": structure
-            }
-            
-            # Step 6: Format output according to configuration
-            formatted_result = self._format_output(result)
-            
-            # Step 7: Clean up temporary files
-            self._cleanup(images_dir)
-            
-            return formatted_result
+            with tempfile.TemporaryDirectory(prefix="odparsed_") as temp_dir:
+                # Step 1: Basic PDF processing - convert to images
+                image_paths = self._convert_pdf_to_images(file_path, temp_dir)
+                
+                # Step 2: Extract text and layout using document intelligence
+                document_info = self._extract_document_info(file_path)
+                
+                # Step 3: Process each page
+                pages = []
+                for i, image_path in enumerate(image_paths):
+                    page_result = self._process_page(image_path, page_num=i)
+                    pages.append(page_result)
+                
+                # Step 4: Extract document structure
+                structure = self._extract_document_structure(file_path, pages)
+                
+                # Step 5: Combine results
+                result = {
+                    "document_info": document_info,
+                    "pages": pages,
+                    "structure": structure
+                }
+                
+                # Step 6: Format output according to configuration
+                formatted_result = self._format_output(result)
+                
+                return formatted_result
             
         except Exception as e:
             self.logger.error(f"Error parsing PDF: {str(e)}")
             return {"error": str(e)}
     
-    def _convert_pdf_to_images(self, pdf_path: Union[str, Path]) -> Tuple[str, List[str]]:
+    def _convert_pdf_to_images(self, pdf_path: Union[str, Path], temp_dir: str) -> List[str]:
         """
         Convert PDF pages to images for processing.
         
         Args:
             pdf_path: Path to PDF file
+            temp_dir: The temporary directory to save images in.
             
         Returns:
-            Tuple of (temp directory, list of image paths)
+            List of image paths
         """
-        import pdf2image
-        
-        # Create temporary directory
-        temp_dir = tempfile.mkdtemp(prefix="odparsed_")
-        
         try:
             # Convert PDF to images
             images = pdf2image.convert_from_path(pdf_path)
@@ -208,11 +186,11 @@ class UnifiedPDFParser:
                 img.save(img_path, "PNG")
                 image_paths.append(img_path)
             
-            return temp_dir, image_paths
+            return image_paths
         
         except Exception as e:
             self.logger.error(f"Error converting PDF to images: {str(e)}")
-            return temp_dir, []
+            return []
     
     def _extract_document_info(self, pdf_path: Union[str, Path]) -> Dict[str, Any]:
         """
@@ -224,8 +202,6 @@ class UnifiedPDFParser:
         Returns:
             Dictionary containing document metadata
         """
-        from PyPDF2 import PdfReader
-        
         try:
             reader = PdfReader(pdf_path)
             info = reader.metadata
@@ -310,7 +286,6 @@ class UnifiedPDFParser:
         # Step 3: Extract form elements if enabled
         # The form extraction is my favorite part of this whole thing -PS
         if self.form_engine:
-            import cv2
             image = cv2.imread(image_path)
             if image is not None:
                 # Create simple PDF data structure for form analyzer
@@ -391,18 +366,7 @@ class UnifiedPDFParser:
         # In a full implementation, this would convert to other formats
         return result
     
-    def _cleanup(self, temp_dir: str) -> None:
-        """
-        Clean up temporary files.
-        
-        Args:
-            temp_dir: Temporary directory
-        """
-        try:
-            import shutil
-            shutil.rmtree(temp_dir)
-        except Exception as e:
-            self.logger.error(f"Error cleaning up temporary files: {str(e)}")
+
     
     def to_markdown(self, parsed_data: Dict[str, Any]) -> str:
         """

@@ -51,6 +51,8 @@ class OptimizedPDFParser:
     - Adapt to document complexity
     """
     
+    DEFAULT_CACHE_MEMORY_RATIO = 0.25  # 25% of total memory budget for cache
+
     def __init__(
         self,
         strategy: ProcessingStrategy = ProcessingStrategy.ADAPTIVE,
@@ -84,7 +86,7 @@ class OptimizedPDFParser:
         
         self.cache_agent = CacheAgent(
             cache_dir=cache_dir,
-            max_memory_mb=max_memory_mb // 4,  # 25% of total for cache
+            max_memory_mb=int(max_memory_mb * self.DEFAULT_CACHE_MEMORY_RATIO),
             enable_disk_cache=enable_cache
         ) if enable_cache else None
         
@@ -221,90 +223,64 @@ class OptimizedPDFParser:
         use_ocr: bool = True
     ) -> Dict[str, Any]:
         """Execute parsing with parallel processing."""
-
-        # Define extraction tasks based on plan
-        tasks = {}
-
-        if plan.extract_text:
-            tasks['text'] = (extract_text, file_path, use_ocr)
-
-        if plan.extract_images:
-            tasks['images'] = (
-                extract_images,
-                file_path,
-                None,  # output_dir
-                plan.max_pages_for_images,
-                plan.image_dpi
-            )
-
-        if plan.extract_tables:
-            tasks['tables'] = (extract_tables, file_path)
-
-        if plan.extract_forms:
-            tasks['forms'] = (extract_forms, file_path)
-
+        tasks = self._get_tasks_from_plan(plan, file_path, use_ocr)
         results = {}
         timings = {}
 
-        # Create progress bar if available and requested
-        pbar = None
-        if show_progress and TQDM_AVAILABLE:
-            pbar = tqdm(total=len(tasks), desc="Parsing PDF", unit="task")
+        pbar = tqdm(total=len(tasks), desc="Parsing PDF", unit="task") if show_progress and TQDM_AVAILABLE else None
 
-        if plan.parallel_workers > 1 and len(tasks) > 1:
-            # Parallel execution
-            logger.info(f"Executing {len(tasks)} tasks in parallel...")
+        try:
+            if plan.parallel_workers > 1 and len(tasks) > 1:
+                logger.info(f"Executing {len(tasks)} tasks in parallel...")
+                with ThreadPoolExecutor(max_workers=plan.parallel_workers) as executor:
+                    future_to_key = {executor.submit(self._run_task, key, func, *args): key for key, (func, *args) in tasks.items()}
 
-            with ThreadPoolExecutor(max_workers=plan.parallel_workers) as executor:
-                future_to_key = {
-                    executor.submit(func, *args): key
-                    for key, (func, *args) in tasks.items()
-                }
-
-                for future in as_completed(future_to_key):
-                    key = future_to_key[future]
-                    task_start = time.time()
-
-                    try:
-                        results[key] = future.result()
-                        timings[key] = time.time() - task_start
-                        logger.info(f"✓ {key} completed in {timings[key]:.2f}s")
+                    for future in as_completed(future_to_key):
+                        key = future_to_key[future]
+                        results[key], timings[key] = future.result()
                         if pbar:
                             pbar.set_description(f"Completed {key}")
                             pbar.update(1)
-                    except Exception as e:
-                        logger.error(f"✗ {key} failed: {e}")
-                        results[key] = [] if key != 'text' else ""
-                        timings[key] = 0
-                        if pbar:
-                            pbar.update(1)
-        else:
-            # Sequential execution
-            logger.info(f"Executing {len(tasks)} tasks sequentially...")
-
-            for key, (func, *args) in tasks.items():
-                if pbar:
-                    pbar.set_description(f"Extracting {key}")
-
-                task_start = time.time()
-                try:
-                    results[key] = func(*args)
-                    timings[key] = time.time() - task_start
-                    logger.info(f"✓ {key} completed in {timings[key]:.2f}s")
+            else:
+                logger.info(f"Executing {len(tasks)} tasks sequentially...")
+                for key, (func, *args) in tasks.items():
+                    results[key], timings[key] = self._run_task(key, func, *args)
                     if pbar:
+                        pbar.set_description(f"Completed {key}")
                         pbar.update(1)
-                except Exception as e:
-                    logger.error(f"✗ {key} failed: {e}")
-                    results[key] = [] if key != 'text' else ""
-                    timings[key] = 0
-                    if pbar:
-                        pbar.update(1)
+        finally:
+            if pbar:
+                pbar.close()
 
-        # Close progress bar
-        if pbar:
-            pbar.close()
-        
-        # Build final result
+        return self._build_result_from_tasks(results, timings, file_path, plan)
+
+    def _get_tasks_from_plan(self, plan, file_path, use_ocr):
+        """Create a dictionary of extraction tasks based on the processing plan."""
+        tasks = {}
+        if plan.extract_text:
+            tasks['text'] = (extract_text, file_path, use_ocr)
+        if plan.extract_images:
+            tasks['images'] = (extract_images, file_path, None, plan.max_pages_for_images, plan.image_dpi)
+        if plan.extract_tables:
+            tasks['tables'] = (extract_tables, file_path)
+        if plan.extract_forms:
+            tasks['forms'] = (extract_forms, file_path)
+        return tasks
+
+    def _run_task(self, key, func, *args):
+        """Run a single extraction task and return the result and timing."""
+        task_start = time.time()
+        try:
+            result = func(*args)
+            timing = time.time() - task_start
+            logger.info(f"✓ {key} completed in {timing:.2f}s")
+            return result, timing
+        except Exception as e:
+            logger.error(f"✗ {key} failed: {e}")
+            return [] if key != 'text' else "", 0
+
+    def _build_result_from_tasks(self, results, timings, file_path, plan):
+        """Compile the final dictionary from task results."""
         return {
             'text': results.get('text', ''),
             'images': results.get('images', []),
@@ -373,8 +349,8 @@ def parse_pdf_optimized(
     """
     Parse a PDF file with intelligent optimization.
     
-    This is a convenience function that creates an OptimizedPDFParser
-    and parses the document.
+    This is a convenience function that creates a temporary OptimizedPDFParser
+    instance and parses a single document.
     
     Args:
         file_path: Path to the PDF file
@@ -383,6 +359,12 @@ def parse_pdf_optimized(
         
     Returns:
         Dictionary containing parsed content
+        
+    Warning:
+        This function re-initializes the parser on every call. For continuous
+        processing and to take advantage of the agents' learning capabilities
+        across multiple documents, create and reuse a single OptimizedPDFParser
+        instance instead.
     """
     parser = OptimizedPDFParser(strategy=strategy)
     return parser.parse(file_path, **kwargs)

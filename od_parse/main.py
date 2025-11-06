@@ -5,29 +5,22 @@ This module provides an easy-to-use interface to the PDF parsing capabilities
 of the od-parse library, allowing users to extract rich content from documents.
 """
 
-import os
-import sys
 import argparse
 import json
-from pathlib import Path
 import logging
-from typing import Dict, List, Any, Optional, Union
+import math
+import os
+import sys
+import time
+import traceback
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# Import core parsing functionality
-try:
-    from od_parse.parser import parse_pdf as core_parse_pdf
-    from od_parse.converter import convert_to_markdown
-    from od_parse.config import get_advanced_config
-    from od_parse.utils.logging_utils import get_logger, configure_logging
-except ImportError:
-    # Fallback for when running from within od_parse directory
-    from parser import parse_pdf as core_parse_pdf
-    from converter import convert_to_markdown
-    from config import get_advanced_config
-    from utils.logging_utils import get_logger, configure_logging
+from od_parse.config import get_advanced_config
+from od_parse.config.llm_config import get_llm_config
+from od_parse.converter import convert_to_markdown
+from od_parse.parser import core_parse_pdf
+from od_parse.utils.logging_utils import configure_logging, get_logger
 
 
 def parse_pdf(
@@ -42,35 +35,41 @@ def parse_pdf(
 ) -> Dict[str, Any]:
     """
     Parse a PDF file using LLM-powered advanced document understanding.
-
-    Args:
-        file_path: Path to the PDF file
-        output_format: Format for output ('raw', 'json', 'markdown', 'text', 'summary')
-        output_file: Path to output file (if None, no file is written)
-        pipeline_type: Type of processing to use (default, full, fast, tables, forms, structure)
-        use_deep_learning: Whether to use advanced features (default: True)
-        llm_model: Specific LLM model to use (optional, auto-selects if None)
-        require_llm: Whether to require LLM for processing (default: True)
-        for_embeddings: Whether to optimize output for embedding generation (default: False)
-
-    Returns:
-        Dictionary containing parsed content optimized for the specified use case
-
-    Raises:
-        ValueError: If require_llm=True but no LLM API keys are available
+    Orchestrates the parsing pipeline by calling a series of helper functions.
     """
-    import time
     start_time = time.time()
 
-    logger = get_logger(__name__)
+    file_path = _validate_and_log_inputs(
+        file_path, pipeline_type, use_deep_learning, llm_model, require_llm
+    )
 
-    # Validate file path
+    if require_llm:
+        _check_llm_availability()
+
+    _configure_advanced_features(use_deep_learning)
+
+    parsed_data = _run_core_parsing(file_path)
+
+    parsed_data = _run_enhancements(
+        parsed_data, file_path, use_deep_learning, require_llm, llm_model, pipeline_type
+    )
+
+    result = _build_final_result(
+        parsed_data, file_path, start_time, pipeline_type, use_deep_learning
+    )
+
+    result = _handle_output(result, output_format, output_file, for_embeddings)
+
+    return result
+
+
+def _validate_and_log_inputs(file_path, pipeline_type, use_deep_learning, llm_model, require_llm):
+    """Validate inputs and log initial parameters."""
+    logger = get_logger(__name__)
     if isinstance(file_path, str):
         file_path = Path(file_path)
-
     if not file_path.exists():
         raise FileNotFoundError(f"File not found: {file_path}")
-
     if not file_path.suffix.lower() == '.pdf':
         raise ValueError(f"File is not a PDF: {file_path}")
 
@@ -79,67 +78,67 @@ def parse_pdf(
     logger.info(f"Use advanced features: {use_deep_learning}")
     logger.info(f"LLM model: {llm_model or 'auto-select'}")
     logger.info(f"Require LLM: {require_llm}")
+    return file_path
 
-    # Check LLM requirement first
-    if require_llm:
-        try:
-            from od_parse.config.llm_config import get_llm_config
-            llm_config = get_llm_config()
-            available_models = llm_config.get_available_models()
 
-            if not available_models:
-                raise ValueError(
-                    "No LLM API keys found. od-parse requires LLM access for document parsing.\n"
-                    "Please set one of the following environment variables:\n"
-                    "  OPENAI_API_KEY for OpenAI models (recommended)\n"
-                    "  ANTHROPIC_API_KEY for Claude models\n"
-                    "  GOOGLE_API_KEY for Gemini models\n"
-                    "  AZURE_OPENAI_API_KEY for Azure OpenAI\n"
-                    "See README.md for detailed setup instructions."
-                )
+def _check_llm_availability():
+    """Check if required LLM API keys are available."""
+    try:
+        llm_config = get_llm_config()
+        available_models = llm_config.get_available_models()
+        if not available_models:
+            raise ValueError(
+                "No LLM API keys found. od-parse requires LLM access for document parsing.\n"
+                "Please set one of the following environment variables:\n"
+                "  OPENAI_API_KEY for OpenAI models (recommended)\n"
+                "  ANTHROPIC_API_KEY for Claude models\n"
+                "  GOOGLE_API_KEY for Gemini models\n"
+                "  AZURE_OPENAI_API_KEY for Azure OpenAI\n"
+                "See README.md for detailed setup instructions."
+            )
+        get_logger(__name__).info(f"Found {len(available_models)} available LLM models")
+    except ImportError:
+        raise ValueError("LLM configuration not available. Please install required dependencies.")
 
-            logger.info(f"Found {len(available_models)} available LLM models")
 
-        except ImportError:
-            if require_llm:
-                raise ValueError("LLM configuration not available. Please install required dependencies.")
-
-    # Configure advanced features if requested
+def _configure_advanced_features(use_deep_learning):
+    """Enable advanced features based on configuration."""
     config = get_advanced_config()
     if use_deep_learning:
-        # Enable available advanced features
         config.enable_feature('trocr', check_dependencies=False)
         config.enable_feature('table_transformer', check_dependencies=False)
         config.enable_feature('quality_assessment', check_dependencies=False)
         config.enable_feature('multilingual', check_dependencies=False)
+    return config
 
-    # Parse the PDF using core functionality
+
+def _run_core_parsing(file_path: Path) -> Dict[str, Any]:
+    """Run the core PDF parsing logic with error handling."""
+    logger = get_logger(__name__)
     try:
-        parsed_data = core_parse_pdf(str(file_path))
+        return core_parse_pdf(str(file_path))
     except Exception as e:
         logger.error(f"Core parsing failed: {e}")
-        # Create minimal result structure
-        parsed_data = {
-            "text": "",
-            "tables": [],
-            "forms": [],
-            "images": [],
+        return {
+            "text": "", "tables": [], "forms": [], "images": [],
             "metadata": {"error": str(e)}
         }
 
-    # Enhance with LLM processing if enabled
-    if use_deep_learning and require_llm:
-        parsed_data = _enhance_with_llm_processing(parsed_data, file_path, llm_model)
-    elif use_deep_learning:
-        # Fallback to traditional advanced features
-        parsed_data = _enhance_with_advanced_features(parsed_data, file_path, pipeline_type)
 
-    # Add processing metadata
+def _run_enhancements(parsed_data, file_path, use_deep_learning, require_llm, llm_model, pipeline_type):
+    """Apply post-processing and data enhancement."""
+    if use_deep_learning and require_llm:
+        return _enhance_with_llm_processing(parsed_data, file_path, llm_model)
+    elif use_deep_learning:
+        return _enhance_with_advanced_features(parsed_data, file_path, pipeline_type)
+    return parsed_data
+
+
+def _build_final_result(parsed_data, file_path, start_time, pipeline_type, use_deep_learning):
+    """Assemble the final result dictionary with metadata and summary."""
     processing_time = time.time() - start_time
     file_stats = file_path.stat()
-
-    # Create comprehensive result
-    result = {
+    return {
         "parsed_data": parsed_data,
         "metadata": {
             "file_name": file_path.name,
@@ -153,30 +152,30 @@ def parse_pdf(
         "summary": _create_summary(parsed_data, file_path, processing_time)
     }
 
-    # Convert to markdown if requested
+
+def _handle_output(result, output_format, output_file, for_embeddings):
+    """Manage output formatting, optimization, and file writing."""
+    logger = get_logger(__name__)
     if output_format == "markdown":
         try:
             logger.info("Starting markdown conversion...")
-            logger.info(f"Parsed data keys: {parsed_data.keys()}")
-            if 'text' in parsed_data:
-                logger.info(f"Text length: {len(parsed_data['text'])}")
-            markdown_content = convert_to_markdown(parsed_data)
+            markdown_content = convert_to_markdown(result['parsed_data'])
             result["markdown_output"] = markdown_content
             logger.info("Markdown conversion completed successfully")
         except Exception as e:
-            import traceback
             error_details = traceback.format_exc()
             logger.error(f"Error converting to markdown: {e}\n{error_details}")
-            result["markdown_output"] = f"# {file_path.name}\n\nMarkdown conversion failed: {e}\n\nError details have been logged.\n\n{error_details}"
+            result["markdown_output"] = (
+                f"# {result['metadata']['file_name']}\n\nMarkdown conversion failed: {e}\n\n"
+                f"Error details have been logged.\n\n{error_details}"
+            )
 
-    # Optimize output for embeddings if requested
     if for_embeddings or output_format == "raw":
         result = _optimize_for_embeddings(result)
 
-    # Write output to file if specified
     if output_file:
         _write_output_file(result, output_file, output_format, logger)
-
+    
     return result
 
 
@@ -420,7 +419,6 @@ def _create_summary(parsed_data: Dict[str, Any], file_path: Path, processing_tim
 
 def _clean_for_json(obj):
     """Clean data structure for valid JSON serialization."""
-    import math
 
     if isinstance(obj, dict):
         cleaned = {}
@@ -553,20 +551,15 @@ def main():
             pipeline_type=args.pipeline,
             use_deep_learning=args.deep_learning
         )
-        print("got the result", result)
-        print("otput format is ", args.output_format)
         # Print summary if no output file
         if not args.output_file:
             if args.output_format == "json":
                 # Clean the result for valid JSON output
-                print("json output")
                 cleaned_result = _clean_for_json(result)
                 print(json.dumps(cleaned_result, indent=2, ensure_ascii=False))
             elif args.output_format == "markdown":
-                print("markdown output")
                 print(result.get("markdown_output", ""))
             elif args.output_format == "summary":
-                print("summary output")
                 summary = result.get("summary", {})
                 print("\nDOCUMENT SUMMARY")
                 print("================")
