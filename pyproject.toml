@@ -30,6 +30,7 @@ classifiers = [
 dependencies = [
     "pdfminer.six>=20221105",
     "PyMuPDF>=1.23.0",  # For better CID font handling
+    "PyPDF2>=3.0.0",  # For PDF writing (used in document chunking)
     "pytesseract>=0.3.10",
     "Pillow>=9.5.0",
     "pdf2image>=1.16.3",
