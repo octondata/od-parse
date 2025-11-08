@@ -44,6 +44,23 @@ VALID_WORD_REGEX = re.compile(r'[a-zA-Z]{3,}')
 GARBAGE_CHARS = frozenset('<>;()[]{}@#$%^&*')
 
 
+def calculate_alpha_ratio(text: str) -> float:
+    """
+    Calculate the ratio of alphabetic characters in text.
+
+    Args:
+        text: Input text
+
+    Returns:
+        Ratio of alphabetic characters (0.0 to 1.0)
+    """
+    if not text:
+        return 0.0
+
+    alpha_count = sum(c.isalpha() for c in text)
+    return alpha_count / len(text)
+
+
 def is_readable_text(text: str) -> bool:
     """
     Checks if text appears to be readable using several heuristics.

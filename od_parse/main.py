@@ -20,7 +20,13 @@ from od_parse.config import get_advanced_config
 from od_parse.config.llm_config import get_llm_config
 from od_parse.converter import convert_to_markdown
 from od_parse.parser import core_parse_pdf
+from od_parse.quality import assess_document_quality
 from od_parse.utils.logging_utils import configure_logging, get_logger
+from od_parse.chunking.document_segmenter import DocumentSegmenter
+import PyPDF2
+import pdfplumber
+import pdf2image
+import numpy as np
 
 
 def parse_pdf(
@@ -493,6 +499,136 @@ def _write_output_file(result: Dict[str, Any], output_file: str, output_format: 
     except Exception as e:
         logger.error(f"Failed to write output file: {e}")
         raise
+
+
+def parse_segmented(file_path: Union[str, Path], **kwargs) -> List[Dict[str, Any]]:
+    """
+    Adaptively parses a PDF, segmenting it if it contains multiple documents.
+
+    Performs a fast pre-check to see if segmentation is needed. If so, it
+    processes each detected document chunk individually.
+
+    Args:
+        file_path: Path to the PDF file.
+        **kwargs: Additional arguments to pass to the underlying parser.
+
+    Returns:
+        A list of parsed result dictionaries, one for each detected document.
+    """
+    logger = get_logger(__name__)
+    file_path = str(file_path)
+
+    if not _is_likely_mixed_document(file_path):
+        # Fast Path: Treat as a single document
+        logger.info("Document appears uniform. Processing as a single file.")
+        result = parse_pdf(file_path, **kwargs)
+        return [result]
+
+    # Intelligent Segmentation Path
+    logger.info("Document appears to be mixed. Starting segmentation...")
+    segmenter = DocumentSegmenter()
+    chunks = segmenter.segment(file_path)
+
+    if len(chunks) <= 1:
+        logger.info("Segmentation resulted in a single chunk. Processing as one file.")
+        result = parse_pdf(file_path, **kwargs)
+        return [result]
+
+    logger.info(f"Detected {len(chunks)} distinct document chunks. Processing each individually.")
+    
+    results = []
+    reader = PyPDF2.PdfReader(file_path)
+
+    for i, page_nums in enumerate(chunks):
+        writer = PyPDF2.PdfWriter()
+        logger.info(f"Processing chunk {i+1}/{len(chunks)} (Pages: {page_nums[0]}-{page_nums[-1]})...")
+
+        if not page_nums:
+            continue
+
+        for page_num in page_nums:
+            # Page numbers in PyPDF2 are 0-indexed
+            writer.add_page(reader.pages[page_num - 1])
+
+        # Save the chunk to a temporary file
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as temp_pdf:
+            temp_path = temp_pdf.name
+            writer.write(temp_path)
+        
+        try:
+            # Parse the temporary PDF chunk
+            chunk_result = parse_pdf(temp_path, **kwargs)
+            # Add chunk info to the metadata
+            chunk_result['metadata']['chunk_info'] = {
+                'chunk_index': i + 1,
+                'total_chunks': len(chunks),
+                'pages': page_nums
+            }
+            results.append(chunk_result)
+        finally:
+            # Clean up the temporary file
+            os.remove(temp_path)
+
+    return results
+
+
+def _is_likely_mixed_document(file_path: str, sample_size: int = 10, variance_threshold: float = 0.05) -> bool:
+    """
+    Performs a fast pre-check on a sample of pages to determine if a PDF
+    is likely to contain multiple different documents.
+
+    Args:
+        file_path: Path to the PDF file.
+        sample_size: The number of pages to sample.
+        variance_threshold: The threshold above which the document is considered mixed.
+
+    Returns:
+        True if the document is likely mixed, False otherwise.
+    """
+    logger = get_logger(__name__)
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            page_count = len(pdf.pages)
+            if page_count <= sample_size or page_count <= 2:
+                logger.info("Document is too short to require segmentation pre-check.")
+                return False
+
+            # Use stratified sampling to select pages
+            indices = np.linspace(0, page_count - 1, sample_size, dtype=int)
+            
+            logger.info(f"Pre-check sampling pages: {list(p + 1 for p in indices)}")
+
+            segmenter = DocumentSegmenter()
+            fingerprints = []
+            for i in indices:
+                page = pdf.pages[i]
+                # Extract single page image to conserve memory
+                image = pdf2image.convert_from_path(file_path, first_page=i + 1, last_page=i + 1)[0]
+                text = page.extract_text() or ""
+                fp = segmenter._get_page_fingerprint(np.array(image), text)
+                fingerprints.append(fp)
+
+            # Calculate variance of pairwise visual similarity
+            if len(fingerprints) < 2:
+                return False
+
+            distances = []
+            for i in range(len(fingerprints)):
+                for j in range(i + 1, len(fingerprints)):
+                    hash1 = fingerprints[i]["visual_hash"]
+                    hash2 = fingerprints[j]["visual_hash"]
+                    distance = hash1.compare(hash2)
+                    distances.append(distance)
+            
+            variance = np.var(distances) / 64.0  # Normalize by hash length
+            logger.info(f"Layout variance score: {variance:.4f} (Threshold: {variance_threshold})")
+
+            return variance > variance_threshold
+
+    except Exception as e:
+        logger.error(f"Failed to perform segmentation pre-check: {e}")
+        # Err on the side of caution: if pre-check fails, assume segmentation is needed.
+        return True
 
 
 def main():
