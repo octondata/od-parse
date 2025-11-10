@@ -11,22 +11,24 @@ import logging
 import math
 import os
 import sys
+import tempfile
 import time
 import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+import numpy as np
+import PyPDF2
+import pdf2image
+import pdfplumber
+
+from od_parse.chunking.document_segmenter import DocumentSegmenter
 from od_parse.config import get_advanced_config
 from od_parse.config.llm_config import get_llm_config
 from od_parse.converter import convert_to_markdown
 from od_parse.parser import core_parse_pdf
 from od_parse.quality import assess_document_quality
 from od_parse.utils.logging_utils import configure_logging, get_logger
-from od_parse.chunking.document_segmenter import DocumentSegmenter
-import PyPDF2
-import pdfplumber
-import pdf2image
-import numpy as np
 
 
 def parse_pdf(
@@ -38,10 +40,37 @@ def parse_pdf(
     llm_model: Optional[str] = None,
     require_llm: bool = True,
     for_embeddings: bool = False,
+    output_forms_separately: bool = False,
+    api_keys: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """
     Parse a PDF file using LLM-powered advanced document understanding.
     Orchestrates the parsing pipeline by calling a series of helper functions.
+    
+    Args:
+        file_path: Path to the PDF file
+        output_format: Format for output ("raw", "json", "markdown", "summary")
+        output_file: Path to output file (optional)
+        pipeline_type: Type of pipeline to use
+        use_deep_learning: Whether to use deep learning features
+        llm_model: LLM model to use (optional)
+        require_llm: Whether LLM is required
+        for_embeddings: Whether to optimize output for embeddings
+        output_forms_separately: If True and output_file is specified, writes separate
+            JSON files for each form (e.g., output_file_form_1.json, output_file_form_2.json)
+        api_keys: Optional dictionary of API keys, e.g.:
+            {
+                "openai": "sk-...",
+                "google": "AIza...",
+                "anthropic": "sk-ant-...",
+                "azure_openai": "your-key",
+                "vllm_server_url": "http://localhost:8000",
+                "vllm_api_key": "optional-key"
+            }
+            If not provided, will use environment variables.
+    
+    Returns:
+        Dictionary containing parsed content and metadata
     """
     start_time = time.time()
 
@@ -50,33 +79,55 @@ def parse_pdf(
     )
 
     if require_llm:
-        _check_llm_availability()
+        _check_llm_availability(api_keys)
 
     _configure_advanced_features(use_deep_learning)
 
     parsed_data = _run_core_parsing(file_path)
 
     parsed_data = _run_enhancements(
-        parsed_data, file_path, use_deep_learning, require_llm, llm_model, pipeline_type
+        parsed_data, file_path, use_deep_learning, require_llm, llm_model, pipeline_type, api_keys
     )
 
     result = _build_final_result(
         parsed_data, file_path, start_time, pipeline_type, use_deep_learning
     )
 
-    result = _handle_output(result, output_format, output_file, for_embeddings)
+    result = _handle_output(result, output_format, output_file, for_embeddings, output_forms_separately)
 
     return result
 
 
-def _validate_and_log_inputs(file_path, pipeline_type, use_deep_learning, llm_model, require_llm):
-    """Validate inputs and log initial parameters."""
+def _validate_and_log_inputs(
+    file_path: Union[str, Path],
+    pipeline_type: str,
+    use_deep_learning: bool,
+    llm_model: Optional[str],
+    require_llm: bool
+) -> Path:
+    """
+    Validate inputs and log initial parameters.
+    
+    Args:
+        file_path: Path to the PDF file
+        pipeline_type: Type of pipeline to use
+        use_deep_learning: Whether to use deep learning features
+        llm_model: LLM model to use (optional)
+        require_llm: Whether LLM is required
+    
+    Returns:
+        Validated Path object
+    
+    Raises:
+        FileNotFoundError: If the file does not exist
+        ValueError: If the file is not a PDF
+    """
     logger = get_logger(__name__)
     if isinstance(file_path, str):
         file_path = Path(file_path)
     if not file_path.exists():
         raise FileNotFoundError(f"File not found: {file_path}")
-    if not file_path.suffix.lower() == '.pdf':
+    if file_path.suffix.lower() != '.pdf':
         raise ValueError(f"File is not a PDF: {file_path}")
 
     logger.info(f"Processing document: {file_path}")
@@ -87,19 +138,28 @@ def _validate_and_log_inputs(file_path, pipeline_type, use_deep_learning, llm_mo
     return file_path
 
 
-def _check_llm_availability():
-    """Check if required LLM API keys are available."""
+def _check_llm_availability(api_keys: Optional[Dict[str, str]] = None) -> None:
+    """
+    Check if required LLM API keys are available.
+    
+    Args:
+        api_keys: Optional dictionary of API keys. If provided, uses these keys
+            instead of environment variables.
+    
+    Raises:
+        ValueError: If no LLM API keys are found or LLM configuration is unavailable
+    """
     try:
-        llm_config = get_llm_config()
+        llm_config = get_llm_config(api_keys=api_keys)
         available_models = llm_config.get_available_models()
         if not available_models:
             raise ValueError(
                 "No LLM API keys found. od-parse requires LLM access for document parsing.\n"
-                "Please set one of the following environment variables:\n"
-                "  OPENAI_API_KEY for OpenAI models (recommended)\n"
-                "  ANTHROPIC_API_KEY for Claude models\n"
-                "  GOOGLE_API_KEY for Gemini models\n"
-                "  AZURE_OPENAI_API_KEY for Azure OpenAI\n"
+                "Please set one of the following:\n"
+                "  1. Environment variables:\n"
+                "     OPENAI_API_KEY, GOOGLE_API_KEY, ANTHROPIC_API_KEY, etc.\n"
+                "  2. Pass api_keys parameter to parse_pdf(), e.g.:\n"
+                "     parse_pdf('file.pdf', api_keys={'google': 'your-key'})\n"
                 "See README.md for detailed setup instructions."
             )
         get_logger(__name__).info(f"Found {len(available_models)} available LLM models")
@@ -107,8 +167,16 @@ def _check_llm_availability():
         raise ValueError("LLM configuration not available. Please install required dependencies.")
 
 
-def _configure_advanced_features(use_deep_learning):
-    """Enable advanced features based on configuration."""
+def _configure_advanced_features(use_deep_learning: bool) -> Any:
+    """
+    Enable advanced features based on configuration.
+    
+    Args:
+        use_deep_learning: Whether to enable deep learning features
+    
+    Returns:
+        Advanced configuration object
+    """
     config = get_advanced_config()
     if use_deep_learning:
         config.enable_feature('trocr', check_dependencies=False)
@@ -131,17 +199,57 @@ def _run_core_parsing(file_path: Path) -> Dict[str, Any]:
         }
 
 
-def _run_enhancements(parsed_data, file_path, use_deep_learning, require_llm, llm_model, pipeline_type):
-    """Apply post-processing and data enhancement."""
+def _run_enhancements(
+    parsed_data: Dict[str, Any],
+    file_path: Path,
+    use_deep_learning: bool,
+    require_llm: bool,
+    llm_model: Optional[str],
+    pipeline_type: str,
+    api_keys: Optional[Dict[str, str]] = None
+) -> Dict[str, Any]:
+    """
+    Apply post-processing and data enhancement.
+    
+    Args:
+        parsed_data: Parsed PDF data
+        file_path: Path to the PDF file
+        use_deep_learning: Whether to use deep learning features
+        require_llm: Whether LLM is required
+        llm_model: LLM model to use (optional)
+        pipeline_type: Type of pipeline to use
+        api_keys: Optional dictionary of API keys
+    
+    Returns:
+        Enhanced parsed data dictionary
+    """
     if use_deep_learning and require_llm:
-        return _enhance_with_llm_processing(parsed_data, file_path, llm_model)
+        return _enhance_with_llm_processing(parsed_data, file_path, llm_model, api_keys)
     elif use_deep_learning:
         return _enhance_with_advanced_features(parsed_data, file_path, pipeline_type)
     return parsed_data
 
 
-def _build_final_result(parsed_data, file_path, start_time, pipeline_type, use_deep_learning):
-    """Assemble the final result dictionary with metadata and summary."""
+def _build_final_result(
+    parsed_data: Dict[str, Any],
+    file_path: Path,
+    start_time: float,
+    pipeline_type: str,
+    use_deep_learning: bool
+) -> Dict[str, Any]:
+    """
+    Assemble the final result dictionary with metadata and summary.
+    
+    Args:
+        parsed_data: Parsed PDF data
+        file_path: Path to the PDF file
+        start_time: Processing start time
+        pipeline_type: Type of pipeline used
+        use_deep_learning: Whether deep learning was used
+    
+    Returns:
+        Complete result dictionary with metadata and summary
+    """
     processing_time = time.time() - start_time
     file_stats = file_path.stat()
     return {
@@ -159,8 +267,26 @@ def _build_final_result(parsed_data, file_path, start_time, pipeline_type, use_d
     }
 
 
-def _handle_output(result, output_format, output_file, for_embeddings):
-    """Manage output formatting, optimization, and file writing."""
+def _handle_output(
+    result: Dict[str, Any],
+    output_format: str,
+    output_file: Optional[str],
+    for_embeddings: bool,
+    output_forms_separately: bool = False
+) -> Dict[str, Any]:
+    """
+    Manage output formatting, optimization, and file writing.
+    
+    Args:
+        result: Parsed result dictionary
+        output_format: Format for output ("raw", "json", "markdown", "summary")
+        output_file: Path to output file (optional)
+        for_embeddings: Whether to optimize for embeddings
+        output_forms_separately: Whether to write separate files for each form
+    
+    Returns:
+        Processed result dictionary
+    """
     logger = get_logger(__name__)
     if output_format == "markdown":
         try:
@@ -180,7 +306,10 @@ def _handle_output(result, output_format, output_file, for_embeddings):
         result = _optimize_for_embeddings(result)
 
     if output_file:
-        _write_output_file(result, output_file, output_format, logger)
+        if output_forms_separately and output_format == "json":
+            _write_forms_separately(result, output_file, logger)
+        else:
+            _write_output_file(result, output_file, output_format, logger)
     
     return result
 
@@ -272,16 +401,32 @@ def _extract_form_content_for_embeddings(forms: List[Dict]) -> List[Dict]:
     return embedding_forms
 
 
-def _enhance_with_llm_processing(parsed_data: Dict[str, Any], file_path: Path, llm_model: Optional[str] = None) -> Dict[str, Any]:
-    """Enhance parsed data with LLM-powered document understanding."""
+def _enhance_with_llm_processing(
+    parsed_data: Dict[str, Any],
+    file_path: Path,
+    llm_model: Optional[str] = None,
+    api_keys: Optional[Dict[str, str]] = None
+) -> Dict[str, Any]:
+    """
+    Enhance parsed data with LLM-powered document understanding.
+    
+    Args:
+        parsed_data: Parsed PDF data
+        file_path: Path to the PDF file
+        llm_model: LLM model to use (optional)
+        api_keys: Optional dictionary of API keys
+    
+    Returns:
+        Enhanced parsed data dictionary
+    """
     logger = get_logger(__name__)
 
     try:
         from od_parse.llm import LLMDocumentProcessor
         from pdf2image import convert_from_path
 
-        # Initialize LLM processor
-        processor = LLMDocumentProcessor(model_id=llm_model)
+        # Initialize LLM processor with API keys
+        processor = LLMDocumentProcessor(model_id=llm_model, api_keys=api_keys)
 
         # Convert PDF to images for vision models
         try:
@@ -307,8 +452,22 @@ def _enhance_with_llm_processing(parsed_data: Dict[str, Any], file_path: Path, l
         return _enhance_with_advanced_features(parsed_data, file_path, "default")
 
 
-def _enhance_with_advanced_features(parsed_data: Dict[str, Any], file_path: Path, pipeline_type: str) -> Dict[str, Any]:
-    """Enhance parsed data with advanced features if available."""
+def _enhance_with_advanced_features(
+    parsed_data: Dict[str, Any],
+    file_path: Path,
+    pipeline_type: str
+) -> Dict[str, Any]:
+    """
+    Enhance parsed data with advanced features if available.
+    
+    Args:
+        parsed_data: Parsed PDF data
+        file_path: Path to the PDF file
+        pipeline_type: Type of pipeline to use
+    
+    Returns:
+        Enhanced parsed data dictionary
+    """
     logger = get_logger(__name__)
 
     # Try to enhance with smart document classification
@@ -378,8 +537,22 @@ def _enhance_with_advanced_features(parsed_data: Dict[str, Any], file_path: Path
     return parsed_data
 
 
-def _create_summary(parsed_data: Dict[str, Any], file_path: Path, processing_time: float) -> Dict[str, Any]:
-    """Create a summary of the parsing results."""
+def _create_summary(
+    parsed_data: Dict[str, Any],
+    file_path: Path,
+    processing_time: float
+) -> Dict[str, Any]:
+    """
+    Create a summary of the parsing results.
+    
+    Args:
+        parsed_data: Parsed PDF data
+        file_path: Path to the PDF file
+        processing_time: Time taken to process the PDF
+    
+    Returns:
+        Summary dictionary with extraction statistics
+    """
     # Count extracted elements
     tables_count = len(parsed_data.get("tables", []))
     forms_count = len(parsed_data.get("forms", []))
@@ -423,8 +596,20 @@ def _create_summary(parsed_data: Dict[str, Any], file_path: Path, processing_tim
     }
 
 
-def _clean_for_json(obj):
-    """Clean data structure for valid JSON serialization."""
+def _clean_for_json(obj: Any) -> Any:
+    """
+    Clean data structure for valid JSON serialization.
+    
+    Recursively cleans dictionaries, lists, and other objects to ensure
+    they can be safely serialized to JSON. Handles NaN, infinity, unicode
+    characters, and other problematic values.
+    
+    Args:
+        obj: Object to clean (can be dict, list, str, float, etc.)
+    
+    Returns:
+        Cleaned object safe for JSON serialization
+    """
 
     if isinstance(obj, dict):
         cleaned = {}
@@ -460,14 +645,18 @@ def _clean_for_json(obj):
             cleaned = cleaned.replace('\u201d', '"')  # right double quotation
             cleaned = cleaned.strip()
             return cleaned if cleaned else None
-        except:
+        except (UnicodeError, AttributeError) as e:
+            logger = get_logger(__name__)
+            logger.debug(f"Error cleaning string: {e}")
             return str(obj)
 
     else:
         try:
             # Try to convert to string, handle any encoding issues
             return str(obj)
-        except:
+        except (TypeError, ValueError) as e:
+            logger = get_logger(__name__)
+            logger.debug(f"Error converting object to string: {e}")
             return None
 
 
@@ -499,6 +688,93 @@ def _write_output_file(result: Dict[str, Any], output_file: str, output_format: 
     except Exception as e:
         logger.error(f"Failed to write output file: {e}")
         raise
+
+
+def _write_forms_separately(result: Dict[str, Any], output_file: str, logger) -> None:
+    """
+    Write separate JSON files for each form found in the PDF.
+    
+    Args:
+        result: The parsed result dictionary
+        output_file: Base output file path (e.g., "output.json")
+        logger: Logger instance
+    """
+    output_path = Path(output_file)
+    
+    # Create directory if it doesn't exist
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Get forms from parsed data
+    forms = result.get('parsed_data', {}).get('forms', [])
+    
+    if not forms:
+        logger.info("No forms found. Writing single output file instead.")
+        _write_output_file(result, output_file, "json", logger)
+        return
+    
+    logger.info(f"Writing {len(forms)} separate form files...")
+    
+    # Write main output file (without forms, or with forms summary)
+    main_result = result.copy()
+    main_result['parsed_data'] = main_result.get('parsed_data', {}).copy()
+    main_result['parsed_data']['forms_summary'] = {
+        'total_forms': len(forms),
+        'forms': [
+            {
+                'form_id': form.get('form_id'),
+                'page': form.get('page'),
+                'field_count': form.get('field_count'),
+                'form_types': form.get('form_types', [])
+            }
+            for form in forms
+        ]
+    }
+    
+    # Write main file
+    _write_output_file(main_result, output_file, "json", logger)
+    
+    # Write separate files for each form
+    base_name = output_path.stem
+    base_dir = output_path.parent
+    extension = output_path.suffix or '.json'
+    
+    form_files = []
+    for i, form in enumerate(forms, 1):
+        form_result = {
+            'form': form,
+            'metadata': {
+                **result.get('metadata', {}),
+                'form_index': i,
+                'total_forms': len(forms),
+                'form_id': form.get('form_id'),
+                'page': form.get('page')
+            },
+            'summary': {
+                'form_id': form.get('form_id'),
+                'page': form.get('page'),
+                'field_count': form.get('field_count'),
+                'form_types': form.get('form_types', [])
+            }
+        }
+        
+        # Generate form-specific filename
+        form_id = form.get('form_id', f'form_{i}').replace(' ', '_').lower()
+        form_filename = f"{base_name}_{form_id}{extension}"
+        form_file_path = base_dir / form_filename
+        
+        try:
+            cleaned_form_result = _clean_for_json(form_result)
+            with open(form_file_path, 'w', encoding='utf-8') as f:
+                json.dump(cleaned_form_result, f, indent=2, ensure_ascii=False)
+            
+            form_files.append(str(form_file_path))
+            logger.info(f"  ✓ Form {i}/{len(forms)} written to: {form_file_path.name}")
+        
+        except Exception as e:
+            logger.error(f"Failed to write form {i} to {form_file_path}: {e}")
+    
+    logger.info(f"✅ Wrote {len(form_files)} separate form files")
+    result['form_files'] = form_files
 
 
 def parse_segmented(file_path: Union[str, Path], **kwargs) -> List[Dict[str, Any]]:
@@ -570,6 +846,92 @@ def parse_segmented(file_path: Union[str, Path], **kwargs) -> List[Dict[str, Any
             os.remove(temp_path)
 
     return results
+
+
+def parse_forms_separately(
+    file_path: Union[str, Path],
+    output_dir: Optional[str] = None,
+    **kwargs
+) -> List[Dict[str, Any]]:
+    """
+    Parse a PDF and return separate JSON dictionaries for each form found.
+    
+    This function extracts all forms from a PDF and returns them as a list of
+    separate JSON dictionaries, one per form. Useful for processing multi-form PDFs
+    where you want to handle each form independently.
+    
+    Args:
+        file_path: Path to the PDF file
+        output_dir: Optional directory to save individual form JSON files
+        **kwargs: Additional arguments to pass to parse_pdf()
+    
+    Returns:
+        List of dictionaries, one per form, each containing:
+        - form: The form data with all fields
+        - metadata: Form metadata including page number, form_id, etc.
+        - summary: Summary information about the form
+    
+    Example:
+        >>> forms = parse_forms_separately("multi_form.pdf")
+        >>> for form_json in forms:
+        ...     print(f"Form on page {form_json['metadata']['page']}")
+        ...     print(f"Fields: {form_json['form']['field_count']}")
+    """
+    logger = get_logger(__name__)
+    
+    # Parse the PDF
+    result = parse_pdf(file_path, **kwargs)
+    
+    # Extract forms from parsed data
+    forms = result.get('parsed_data', {}).get('forms', [])
+    
+    if not forms:
+        logger.info("No forms found in PDF")
+        return []
+    
+    logger.info(f"Extracted {len(forms)} forms, returning as separate JSONs")
+    
+    # Create separate JSON dictionaries for each form
+    form_jsons = []
+    for i, form in enumerate(forms, 1):
+        form_json = {
+            'form': form,
+            'metadata': {
+                **result.get('metadata', {}),
+                'form_index': i,
+                'total_forms': len(forms),
+                'form_id': form.get('form_id'),
+                'page': form.get('page')
+            },
+            'summary': {
+                'form_id': form.get('form_id'),
+                'page': form.get('page'),
+                'field_count': form.get('field_count'),
+                'form_types': form.get('form_types', [])
+            }
+        }
+        form_jsons.append(form_json)
+    
+    # Optionally write to files
+    if output_dir:
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        base_name = Path(file_path).stem
+        for i, form_json in enumerate(form_jsons, 1):
+            form_id = form_json['form'].get('form_id', f'form_{i}').replace(' ', '_').lower()
+            form_filename = f"{base_name}_{form_id}.json"
+            form_file_path = output_path / form_filename
+            
+            try:
+                cleaned_form_json = _clean_for_json(form_json)
+                with open(form_file_path, 'w', encoding='utf-8') as f:
+                    json.dump(cleaned_form_json, f, indent=2, ensure_ascii=False)
+                logger.info(f"  ✓ Form {i}/{len(forms)} saved to: {form_file_path}")
+            except Exception as e:
+                logger.error(f"Failed to save form {i} to {form_file_path}: {e}")
+    
+    return form_jsons
 
 
 def _is_likely_mixed_document(file_path: str, sample_size: int = 10, variance_threshold: float = 0.05) -> bool:

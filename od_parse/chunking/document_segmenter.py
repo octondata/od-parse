@@ -10,7 +10,6 @@ import numpy as np
 import pdfplumber
 import pdf2image
 
-class DocumentSegmenter:
 
 class DocumentSegmenter:
     """
@@ -177,4 +176,5 @@ class DocumentSegmenter:
             # In a real scenario, we might want to be more conservative and
             # assume a boundary in ambiguous cases.
             return False
-        pass
+        # TODO: Implement LLM-based boundary detection
+        return False

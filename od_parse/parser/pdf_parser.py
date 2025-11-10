@@ -1,24 +1,27 @@
 """
 Core PDF parsing functionality.
+
+This module provides the core PDF parsing capabilities including text extraction,
+table extraction, form extraction, and image extraction using various PDF
+processing libraries.
 """
 
-import os
 import logging
-from typing import Dict, List, Any, Optional, Union
-from pathlib import Path
-
-import pdfminer
-from pdfminer.high_level import extract_text as pdfminer_extract_text
-from pdfminer.layout import LAParams, LTTextContainer, LTImage, LTFigure
-from pdfminer.converter import PDFPageAggregator
-from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
-from pdfminer.pdfpage import PDFPage
-from pdfminer.pdfpage import PDFPage
-import pdf2image
-import cv2
-import numpy as np
+import os
 import re
 import time
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+
+import cv2
+import numpy as np
+import pdf2image
+import pdfminer
+from pdfminer.converter import PDFPageAggregator
+from pdfminer.high_level import extract_text as pdfminer_extract_text
+from pdfminer.layout import LAParams, LTFigure, LTImage, LTTextContainer
+from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
+from pdfminer.pdfpage import PDFPage
 
 # Try to import pdfplumber for table extraction (pure Python, no Java needed)
 try:
@@ -26,7 +29,6 @@ try:
     PDFPLUMBER_AVAILABLE = True
 except ImportError:
     PDFPLUMBER_AVAILABLE = False
-    logger.warning("pdfplumber not available. Table extraction will be limited. Install with: pip install pdfplumber")
 
 from od_parse.ocr import extract_handwritten_content
 from od_parse.utils.file_utils import validate_file
@@ -34,6 +36,13 @@ from od_parse.utils.logging_utils import get_logger
 from od_parse.utils.text_normalizer import normalize_ocr_spacing
 
 logger = get_logger(__name__)
+
+# Log pdfplumber availability after logger is initialized
+if not PDFPLUMBER_AVAILABLE:
+    logger.warning(
+        "pdfplumber not available. Table extraction will be limited. "
+        "Install with: pip install pdfplumber"
+    )
 
 
 MIN_TEXT_LENGTH = 10
@@ -705,19 +714,256 @@ def extract_forms(file_path: Union[str, Path]) -> List[Dict[str, Any]]:
     """
     Extract form elements (checkboxes, radio buttons, text fields) from a PDF file.
     
+    Properly extracts all form fields from all pages using PyPDF2's AcroForm structure.
+    Groups form fields by page and form structure.
+    
     Args:
         file_path: Path to the PDF file
     
     Returns:
-        List of extracted form elements as dictionaries
+        List of extracted forms, where each form contains all its fields
     """
     try:
-        # This is a simplified implementation
-        # In a real-world scenario, you would use a library like PyPDF2 or pdfrw
-        # to extract form fields
+        import PyPDF2
         
-        form_elements = []
+        logger.info(f"Extracting form fields from PDF: {file_path}")
         
+        forms_by_page = {}  # Group forms by page
+        all_form_fields = []  # Flat list of all form fields
+        
+        # Open PDF with PyPDF2 to access AcroForm structure
+        with open(file_path, 'rb') as file:
+            try:
+                reader = PyPDF2.PdfReader(file)
+                
+                # Check if PDF has form fields (AcroForm)
+                has_forms = False
+                for page in reader.pages:
+                    if '/Annots' in page:
+                        annots = page['/Annots']
+                        if annots:
+                            has_forms = True
+                            break
+                
+                if not has_forms:
+                    # Try alternative: check for form fields using get_form_text_fields
+                    try:
+                        if hasattr(reader, 'get_form_text_fields'):
+                            form_fields = reader.get_form_text_fields()
+                            if form_fields:
+                                has_forms = True
+                    except:
+                        pass
+                
+                if not has_forms:
+                    logger.info("No form fields detected in PDF")
+                    return []
+                
+                # Extract form fields from each page
+                for page_num, page in enumerate(reader.pages, 1):
+                    page_form_fields = []
+                    
+                    # Method 1: Try to get form fields using get_form_text_fields (PyPDF2 3.0+)
+                    try:
+                        if hasattr(reader, 'get_form_text_fields'):
+                            form_fields = reader.get_form_text_fields()
+                            if form_fields:
+                                for field_name, field_value in form_fields.items():
+                                    # Try to determine which page this field is on
+                                    # Since get_form_text_fields doesn't provide page info,
+                                    # we'll add it to the first page and let annotation method override
+                                    if page_num == 1:  # Only add once
+                                        page_form_fields.append({
+                                            'field_name': field_name,
+                                            'field_value': field_value,
+                                            'field_type': 'text',
+                                            'page': page_num
+                                        })
+                    except Exception as e:
+                        logger.debug(f"Could not use get_form_text_fields: {e}")
+                    
+                    # Method 2: Extract annotations (form fields) from page
+                    try:
+                        if '/Annots' in page:
+                            annots = page['/Annots']
+                            if annots:
+                                for annot_ref in annots:
+                                    try:
+                                        annot = annot_ref.get_object() if hasattr(annot_ref, 'get_object') else annot_ref
+                                        
+                                        # Get annotation type
+                                        annot_type = annot.get('/Subtype', '') if hasattr(annot, 'get') else ''
+                                        if isinstance(annot_type, bytes):
+                                            annot_type = annot_type.decode('utf-8', errors='ignore')
+                                        annot_type = annot_type.lower()
+                                        
+                                        # Get field name and value
+                                        field_name = annot.get('/T', '') if hasattr(annot, 'get') else ''
+                                        if isinstance(field_name, bytes):
+                                            field_name = field_name.decode('utf-8', errors='ignore')
+                                        
+                                        # Determine field type
+                                        field_type = 'unknown'
+                                        field_value = None
+                                        
+                                        if annot_type == 'widget':
+                                            # Check for form field attributes
+                                            ft = annot.get('/FT', '') if hasattr(annot, 'get') else ''
+                                            if isinstance(ft, bytes):
+                                                ft = ft.decode('utf-8', errors='ignore')
+                                            
+                                            if ft == '/Tx' or ft == 'Tx':  # Text field
+                                                field_type = 'text'
+                                                field_value = annot.get('/V', '') if hasattr(annot, 'get') else ''
+                                                if isinstance(field_value, bytes):
+                                                    field_value = field_value.decode('utf-8', errors='ignore')
+                                            
+                                            elif ft == '/Btn' or ft == 'Btn':  # Button (checkbox or radio)
+                                                # Check if it's a checkbox or radio button
+                                                ff = annot.get('/Ff', 0) if hasattr(annot, 'get') else 0
+                                                
+                                                if ff & 0x8000:  # Radio button flag
+                                                    field_type = 'radio'
+                                                    field_value = annot.get('/V', '') if hasattr(annot, 'get') else ''
+                                                    if isinstance(field_value, bytes):
+                                                        field_value = field_value.decode('utf-8', errors='ignore')
+                                                else:  # Checkbox
+                                                    field_type = 'checkbox'
+                                                    # Check if checkbox is checked
+                                                    v = annot.get('/V', '') if hasattr(annot, 'get') else ''
+                                                    if isinstance(v, bytes):
+                                                        v = v.decode('utf-8', errors='ignore')
+                                                    field_value = (v == '/Yes' or v == 'Yes' or v is True or 
+                                                                  (isinstance(v, str) and v.lower() == 'yes'))
+                                            
+                                            elif ft == '/Ch' or ft == 'Ch':  # Choice (dropdown/list)
+                                                field_type = 'dropdown'
+                                                field_value = annot.get('/V', '') if hasattr(annot, 'get') else ''
+                                                if isinstance(field_value, bytes):
+                                                    field_value = field_value.decode('utf-8', errors='ignore')
+                                            
+                                            elif ft == '/Sig' or ft == 'Sig':  # Signature field
+                                                field_type = 'signature'
+                                                field_value = annot.get('/V', '') if hasattr(annot, 'get') else ''
+                                        
+                                        # Get bounding box if available
+                                        rect = annot.get('/Rect', []) if hasattr(annot, 'get') else []
+                                        bbox = None
+                                        if rect and len(rect) >= 4:
+                                            try:
+                                                bbox = {
+                                                    'x0': float(rect[0]),
+                                                    'y0': float(rect[1]),
+                                                    'x1': float(rect[2]),
+                                                    'y1': float(rect[3])
+                                                }
+                                            except (ValueError, TypeError):
+                                                pass
+                                        
+                                        # Only add if we have a field name or it's a valid form field
+                                        if field_name or field_type != 'unknown':
+                                            field_data = {
+                                                'field_name': field_name or f'field_{len(page_form_fields) + 1}',
+                                                'field_type': field_type,
+                                                'field_value': field_value,
+                                                'page': page_num,
+                                                'bbox': bbox
+                                            }
+                                            
+                                            # Get additional properties
+                                            if hasattr(annot, 'get'):
+                                                # Get field label/alternate name
+                                                tu = annot.get('/TU', '')  # Tooltip/alternate name
+                                                if tu:
+                                                    if isinstance(tu, bytes):
+                                                        tu = tu.decode('utf-8', errors='ignore')
+                                                    field_data['label'] = tu
+                                                
+                                                # Get default value
+                                                dv = annot.get('/DV', '')
+                                                if dv:
+                                                    if isinstance(dv, bytes):
+                                                        dv = dv.decode('utf-8', errors='ignore')
+                                                    field_data['default_value'] = dv
+                                                
+                                                # Check if field is required
+                                                ff = annot.get('/Ff', 0)
+                                                if isinstance(ff, (int, float)):
+                                                    if ff & 0x2:  # Required flag
+                                                        field_data['required'] = True
+                                                    
+                                                    # Check if field is read-only
+                                                    if ff & 0x1:  # Read-only flag
+                                                        field_data['read_only'] = True
+                                            
+                                            page_form_fields.append(field_data)
+                                    
+                                    except Exception as e:
+                                        logger.debug(f"Error processing annotation on page {page_num}: {e}")
+                                        continue
+                    
+                    except Exception as e:
+                        logger.debug(f"Error extracting annotations from page {page_num}: {e}")
+                    
+                    # If we found form fields on this page, add them
+                    if page_form_fields:
+                        forms_by_page[page_num] = page_form_fields
+                        all_form_fields.extend(page_form_fields)
+                        logger.info(f"Found {len(page_form_fields)} form fields on page {page_num}")
+                
+                # If we have form fields, organize them into forms
+                if all_form_fields:
+                    # Group fields by page to create form objects
+                    forms = []
+                    
+                    for page_num, fields in forms_by_page.items():
+                        # Create a form object for this page
+                        form = {
+                            'form_id': f'form_page_{page_num}',
+                            'page': page_num,
+                            'field_count': len(fields),
+                            'fields': fields,
+                            'form_types': list(set(f.get('field_type', 'unknown') for f in fields))
+                        }
+                        forms.append(form)
+                    
+                    logger.info(f"✅ Extracted {len(forms)} forms with {len(all_form_fields)} total fields")
+                    return forms
+                
+                else:
+                    logger.info("No form fields found in PDF")
+                    return []
+            
+            except Exception as e:
+                logger.warning(f"PyPDF2 could not read PDF form structure: {e}")
+                # Fallback to basic text-based detection
+                return _extract_forms_fallback(file_path)
+    
+    except ImportError:
+        logger.warning("PyPDF2 not available. Using fallback form extraction method.")
+        return _extract_forms_fallback(file_path)
+    
+    except Exception as e:
+        logger.error(f"Error extracting form elements from {file_path}: {e}")
+        return _extract_forms_fallback(file_path)
+
+
+def _extract_forms_fallback(file_path: Union[str, Path]) -> List[Dict[str, Any]]:
+    """
+    Fallback method for form extraction using text-based detection.
+    Used when PyPDF2 cannot extract form fields or is not available.
+    
+    Args:
+        file_path: Path to the PDF file
+    
+    Returns:
+        List of potential form elements grouped by page
+    """
+    logger.info("Using fallback text-based form detection")
+    
+    form_elements = []
+    
+    try:
         # Open the PDF file
         with open(file_path, 'rb') as file:
             # Create a PDF resource manager and page aggregator
@@ -735,7 +981,7 @@ def extract_forms(file_path: Union[str, Path]) -> List[Dict[str, Any]]:
                 for element in layout:
                     if isinstance(element, LTTextContainer):
                         text = element.get_text().strip().lower()
-                        if any(keyword in text for keyword in ['check', 'select', 'choose', 'click']):
+                        if any(keyword in text for keyword in ['check', 'select', 'choose', 'click', 'field', 'input', 'form']):
                             form_elements.append({
                                 'type': 'potential_form_field',
                                 'page': page_num + 1,
@@ -743,7 +989,31 @@ def extract_forms(file_path: Union[str, Path]) -> List[Dict[str, Any]]:
                                 'bbox': (element.x0, element.y0, element.x1, element.y1)
                             })
         
-        return form_elements
+        # Group by page
+        if form_elements:
+            forms = []
+            pages_with_forms = {}
+            
+            for element in form_elements:
+                page = element['page']
+                if page not in pages_with_forms:
+                    pages_with_forms[page] = []
+                pages_with_forms[page].append(element)
+            
+            for page_num, fields in pages_with_forms.items():
+                forms.append({
+                    'form_id': f'form_page_{page_num}',
+                    'page': page_num,
+                    'field_count': len(fields),
+                    'fields': fields,
+                    'form_types': ['potential_form_field']
+                })
+            
+            logger.info(f"✅ Extracted {len(forms)} forms using fallback method")
+            return forms
+        
+        return []
+    
     except Exception as e:
-        logger.error(f"Error extracting form elements from {file_path}: {e}")
+        logger.error(f"Error in fallback form extraction: {e}")
         return []

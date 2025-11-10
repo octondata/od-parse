@@ -2,7 +2,10 @@
 Advanced PDF Parsing Example
 
 This script demonstrates the advanced PDF parsing capabilities of the od-parse library,
-showing how to extract rich content from complex documents using various pipeline configurations.
+showing how to extract rich content from complex documents using various configurations.
+
+Note: od-parse requires LLM API keys. Set GOOGLE_API_KEY environment variable
+or pass api_keys parameter.
 """
 
 import os
@@ -13,34 +16,32 @@ from pathlib import Path
 # Add parent directory to path to import od_parse
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from od_parse.main import parse_pdf
-from od_parse.advanced.pipeline import (
-    PDFPipeline,
-    LoadDocumentStage,
-    BasicParsingStage,
-    AdvancedParsingStage,
-    TableExtractionStage,
-    FormExtractionStage,
-    HandwrittenContentStage,
-    DocumentStructureStage,
-    OutputFormattingStage
-)
+from od_parse import parse_pdf
 from od_parse.utils.logging_utils import configure_logging
 
 
-def simple_example(pdf_path):
+def simple_example(pdf_path, api_key=None):
     """
     Simple example of parsing a PDF using the default pipeline.
     
     Args:
         pdf_path: Path to the PDF file
+        api_key: Optional API key (uses GOOGLE_API_KEY env var if not provided)
     """
     print("\n=== SIMPLE EXAMPLE ===")
     print(f"Parsing PDF: {pdf_path}")
     
+    # Get API key from parameter or environment
+    api_key = api_key or os.getenv('GOOGLE_API_KEY')
+    if not api_key:
+        print("Error: API key required. Set GOOGLE_API_KEY environment variable")
+        return
+    
     # Parse the PDF using default settings
     result = parse_pdf(
         file_path=pdf_path,
+        llm_model="gemini-2.0-flash",
+        api_keys={"google": api_key},
         output_format="summary",
         pipeline_type="default",
         use_deep_learning=False  # Use faster extraction without deep learning
@@ -64,100 +65,150 @@ def simple_example(pdf_path):
     print(f"\nProcessing Time: {summary.get('processing_time_seconds', 0):.2f} seconds")
 
 
-def table_extraction_example(pdf_path):
+def table_extraction_example(pdf_path, api_key=None):
     """
     Example of extracting tables from a PDF.
     
     Args:
         pdf_path: Path to the PDF file
+        api_key: Optional API key (uses GOOGLE_API_KEY env var if not provided)
     """
     print("\n=== TABLE EXTRACTION EXAMPLE ===")
     print(f"Extracting tables from PDF: {pdf_path}")
     
-    # Create a custom pipeline for table extraction
-    pipeline = PDFPipeline()
-    pipeline.add_stage(LoadDocumentStage())
-    pipeline.add_stage(TableExtractionStage({"use_neural": True}))  # Use neural network-based extraction
-    pipeline.add_stage(OutputFormattingStage({"format": "json"}))
+    # Get API key from parameter or environment
+    api_key = api_key or os.getenv('GOOGLE_API_KEY')
+    if not api_key:
+        print("Error: API key required. Set GOOGLE_API_KEY environment variable")
+        return
     
-    # Process the PDF
-    result = pipeline.process(pdf_path)
+    # Parse PDF with focus on table extraction
+    result = parse_pdf(
+        file_path=pdf_path,
+        llm_model="gemini-2.0-flash",
+        api_keys={"google": api_key},
+        output_format="json",
+        pipeline_type="default",
+        use_deep_learning=True  # Use deep learning for better table extraction
+    )
     
     # Print table information
-    tables = result.get("tables", [])
+    parsed_data = result.get("parsed_data", {})
+    tables = parsed_data.get("tables", [])
     print(f"\nExtracted {len(tables)} tables")
     
     for i, table in enumerate(tables):
-        print(f"\nTable {i+1} (Page {table.get('page_number')})")
-        print(f"Rows: {table.get('rows')}, Columns: {table.get('cols')}")
-        print(f"Confidence: {table.get('confidence', 0):.2f}")
+        page = table.get('page', table.get('page_number', 'unknown'))
+        print(f"\nTable {i+1} (Page {page})")
+        rows = table.get('rows', table.get('num_rows', 'unknown'))
+        cols = table.get('cols', table.get('num_cols', 'unknown'))
+        print(f"Rows: {rows}, Columns: {cols}")
+        if 'confidence' in table:
+            print(f"Confidence: {table.get('confidence', 0):.2f}")
         
-        # Print markdown representation of the table
-        print("\nMarkdown Table:")
-        print(table.get("markdown", ""))
+        # Print table data if available
+        if 'data' in table:
+            print("\nTable Data (first few rows):")
+            for row in table['data'][:3]:
+                print(f"  {row}")
 
 
-def form_extraction_example(pdf_path):
+def form_extraction_example(pdf_path, api_key=None):
     """
     Example of extracting form fields from a PDF.
     
     Args:
         pdf_path: Path to the PDF file
+        api_key: Optional API key (uses GOOGLE_API_KEY env var if not provided)
     """
     print("\n=== FORM EXTRACTION EXAMPLE ===")
     print(f"Extracting form fields from PDF: {pdf_path}")
     
+    # Get API key from parameter or environment
+    api_key = api_key or os.getenv('GOOGLE_API_KEY')
+    if not api_key:
+        print("Error: API key required. Set GOOGLE_API_KEY environment variable")
+        return
+    
     # Parse the PDF using the forms pipeline
     result = parse_pdf(
         file_path=pdf_path,
+        llm_model="gemini-2.0-flash",
+        api_keys={"google": api_key},
         pipeline_type="forms",
         use_deep_learning=True
     )
     
     # Print form field information
-    forms = result.get("forms", [])
-    print(f"\nExtracted {len(forms)} form fields")
+    parsed_data = result.get("parsed_data", {})
+    forms = parsed_data.get("forms", [])
+    print(f"\nExtracted {len(forms)} forms")
     
-    for i, field in enumerate(forms):
-        field_type = field.get("type", "unknown")
-        label = field.get("label", "Unlabeled Field")
-        value = field.get("value", "")
-        page = field.get("page_number", 0)
+    for i, form in enumerate(forms):
+        form_id = form.get("form_id", f"form_{i+1}")
+        page = form.get("page", form.get("page_number", 0))
+        fields = form.get("fields", [])
         
-        print(f"\nField {i+1} (Page {page})")
-        print(f"Type: {field_type}")
-        print(f"Label: {label}")
+        print(f"\nForm {i+1} (ID: {form_id}, Page {page})")
+        print(f"Fields: {len(fields)}")
         
-        if field_type == "checkbox":
-            status = "Checked" if field.get("is_checked") else "Unchecked"
-            print(f"Status: {status}")
-        else:
-            print(f"Value: {value}")
+        for j, field in enumerate(fields[:5]):  # Show first 5 fields
+            field_type = field.get("type", "unknown")
+            name = field.get("name", field.get("label", "Unlabeled Field"))
+            value = field.get("value", "")
+            
+            print(f"  Field {j+1}: {name} ({field_type})")
+            if field_type == "checkbox":
+                status = "Checked" if field.get("is_checked", field.get("value")) else "Unchecked"
+                print(f"    Status: {status}")
+            elif value:
+                print(f"    Value: {value}")
+        
+        if len(fields) > 5:
+            print(f"  ... and {len(fields) - 5} more fields")
 
 
-def document_structure_example(pdf_path):
+def document_structure_example(pdf_path, api_key=None):
     """
     Example of extracting document structure from a PDF.
     
     Args:
         pdf_path: Path to the PDF file
+        api_key: Optional API key (uses GOOGLE_API_KEY env var if not provided)
     """
     print("\n=== DOCUMENT STRUCTURE EXAMPLE ===")
     print(f"Extracting structure from PDF: {pdf_path}")
     
+    # Get API key from parameter or environment
+    api_key = api_key or os.getenv('GOOGLE_API_KEY')
+    if not api_key:
+        print("Error: API key required. Set GOOGLE_API_KEY environment variable")
+        return
+    
     # Parse the PDF using the structure pipeline
     result = parse_pdf(
         file_path=pdf_path,
+        llm_model="gemini-2.0-flash",
+        api_keys={"google": api_key},
         pipeline_type="structure",
         use_deep_learning=True
     )
     
     # Print structure information
-    structure = result.get("structure", {})
+    parsed_data = result.get("parsed_data", {})
+    structure = parsed_data.get("structure", {})
     elements = structure.get("elements", [])
+    
+    if not elements:
+        # Try to get structure from LLM analysis
+        llm_analysis = parsed_data.get("llm_analysis", {})
+        if llm_analysis:
+            print(f"\nDocument Type: {llm_analysis.get('document_type', 'unknown')}")
+            print(f"Key Information: {llm_analysis.get('key_information', {})}")
+    
     print(f"\nExtracted {len(elements)} structural elements")
     
-    for i, element in enumerate(elements):
+    for i, element in enumerate(elements[:10]):  # Show first 10 elements
         elem_type = element.get("type", "unknown")
         text = element.get("text", "")
         
@@ -172,22 +223,34 @@ def document_structure_example(pdf_path):
             print(f"\nList Item: {text}")
         else:
             print(f"\n{elem_type.capitalize()}: {text}")
+    
+    if len(elements) > 10:
+        print(f"\n... and {len(elements) - 10} more elements")
 
 
-def full_extraction_example(pdf_path, output_path=None):
+def full_extraction_example(pdf_path, output_path=None, api_key=None):
     """
     Example of full PDF extraction with all capabilities.
     
     Args:
         pdf_path: Path to the PDF file
         output_path: Optional path to save the output
+        api_key: Optional API key (uses GOOGLE_API_KEY env var if not provided)
     """
     print("\n=== FULL EXTRACTION EXAMPLE ===")
     print(f"Performing full extraction on PDF: {pdf_path}")
     
+    # Get API key from parameter or environment
+    api_key = api_key or os.getenv('GOOGLE_API_KEY')
+    if not api_key:
+        print("Error: API key required. Set GOOGLE_API_KEY environment variable")
+        return
+    
     # Parse the PDF using the full pipeline
     result = parse_pdf(
         file_path=pdf_path,
+        llm_model="gemini-2.0-flash",
+        api_keys={"google": api_key},
         output_format="markdown",
         output_file=output_path,
         pipeline_type="full",
@@ -199,10 +262,13 @@ def full_extraction_example(pdf_path, output_path=None):
     if output_path:
         print(f"Results saved to: {output_path}")
     else:
-        # Print the first 500 characters of the markdown output
-        markdown = result.get("markdown_output", "")
-        preview = markdown[:500] + "..." if len(markdown) > 500 else markdown
-        print(f"\nMarkdown Preview:\n\n{preview}")
+        # Print summary information
+        parsed_data = result.get("parsed_data", {})
+        print(f"\nExtracted Content:")
+        print(f"- Text: {len(parsed_data.get('text', ''))} characters")
+        print(f"- Tables: {len(parsed_data.get('tables', []))} tables")
+        print(f"- Forms: {len(parsed_data.get('forms', []))} forms")
+        print(f"- Images: {len(parsed_data.get('images', []))} images")
 
 
 def main():
@@ -215,7 +281,9 @@ def main():
         pdf_path = sys.argv[1]
     else:
         print("Please provide a path to a PDF file.")
-        print("Usage: python advanced_pdf_parsing.py <pdf_path> [output_path]")
+        print("Usage: python advanced_pdf_parsing.py <pdf_path> [output_path] [api_key]")
+        print("\nNote: API key can also be set via GOOGLE_API_KEY environment variable")
+        print("Get your API key from: https://makersuite.google.com/app/apikey")
         return 1
     
     # Check if output path is provided
@@ -223,16 +291,26 @@ def main():
     if len(sys.argv) > 2:
         output_path = sys.argv[2]
     
+    # Check if API key is provided
+    api_key = None
+    if len(sys.argv) > 3:
+        api_key = sys.argv[3]
+    elif not os.getenv('GOOGLE_API_KEY'):
+        print("Warning: No API key provided. Set GOOGLE_API_KEY environment variable or pass as third argument")
+        print("Get your API key from: https://makersuite.google.com/app/apikey")
+    
     # Run the examples
     try:
-        simple_example(pdf_path)
-        table_extraction_example(pdf_path)
-        form_extraction_example(pdf_path)
-        document_structure_example(pdf_path)
-        full_extraction_example(pdf_path, output_path)
+        simple_example(pdf_path, api_key)
+        table_extraction_example(pdf_path, api_key)
+        form_extraction_example(pdf_path, api_key)
+        document_structure_example(pdf_path, api_key)
+        full_extraction_example(pdf_path, output_path, api_key)
         return 0
     except Exception as e:
         print(f"Error: {str(e)}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
         return 1
 
 

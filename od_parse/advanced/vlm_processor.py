@@ -83,7 +83,25 @@ class VLMProcessor:
         """Initialize the VLM client based on configuration."""
         self.client = None
         
-        if self.model.startswith("qwen"):
+        # Check if using vLLM server (OpenAI-compatible API) - optional
+        if self.model.startswith("vllm-") or (self.api_base and ("localhost" in self.api_base or "127.0.0.1" in self.api_base)):
+            try:
+                from openai import OpenAI
+                # For vLLM, API key is optional
+                api_key = self.api_key or os.getenv("VLLM_API_KEY", "EMPTY")
+                # Try to connect to vLLM server (optional, don't fail if not available)
+                try:
+                    self.client = OpenAI(api_key=api_key, base_url=self.api_base)
+                    # Test connection (optional)
+                    self.logger.info(f"Initialized VLM model via vLLM server (optional): {self.model}")
+                except Exception as e:
+                    self.logger.debug(f"vLLM server not available (optional): {e}")
+                    self.client = None
+            except ImportError:
+                self.logger.debug("OpenAI package not installed. vLLM is optional.")
+                self.client = None
+        
+        elif self.model.startswith("qwen"):
             try:
                 from openai import OpenAI
                 if not self.api_key:

@@ -28,18 +28,28 @@ class LLMDocumentProcessor:
     information from complex documents with high accuracy.
     """
     
-    def __init__(self, model_id: Optional[str] = None, custom_config: Optional[Dict] = None):
+    def __init__(self, model_id: Optional[str] = None, custom_config: Optional[Dict] = None, api_keys: Optional[Dict[str, str]] = None):
         """
         Initialize LLM document processor.
         
         Args:
             model_id: Specific model to use (optional, will auto-select if None)
             custom_config: Custom configuration overrides
+            api_keys: Optional dictionary of API keys, e.g.:
+                {
+                    "openai": "sk-...",
+                    "google": "AIza...",
+                    "anthropic": "sk-ant-...",
+                    "azure_openai": "your-key",
+                    "vllm_server_url": "http://localhost:8000",
+                    "vllm_api_key": "optional-key"
+                }
         """
         self.logger = get_logger(__name__)
-        self.llm_config = get_llm_config()
+        self.llm_config = get_llm_config(api_keys=api_keys)
         self.model_id = model_id
         self.custom_config = custom_config or {}
+        self.api_keys = api_keys or {}
         
         # Initialize document classifier for intelligent routing
         self.classifier = DocumentClassifier()
@@ -59,11 +69,20 @@ class LLMDocumentProcessor:
                 "  ANTHROPIC_API_KEY for Claude models\n"
                 "  GOOGLE_API_KEY for Gemini models\n"
                 "  AZURE_OPENAI_API_KEY for Azure OpenAI\n"
+                "Or optionally set up a local vLLM server (see docs/vllm_setup_guide.md)\n"
                 "See README.md for detailed setup instructions."
             )
         
         if self.model_id and self.model_id not in available_models:
-            self.logger.warning(f"Requested model {self.model_id} not available. Using default.")
+            # Check if it's a vLLM model that's not available
+            model_config = self.llm_config.models.get(self.model_id)
+            if model_config and model_config.provider == LLMProvider.VLLM:
+                self.logger.warning(
+                    f"Requested vLLM model {self.model_id} not available. "
+                    "vLLM server is optional. Using default model instead."
+                )
+            else:
+                self.logger.warning(f"Requested model {self.model_id} not available. Using default.")
             self.model_id = None
         
         if not self.model_id:
@@ -153,6 +172,8 @@ class LLMDocumentProcessor:
             return self._process_with_anthropic(parsed_data, document_images, system_prompt, doc_type)
         elif model_config.provider == LLMProvider.GOOGLE:
             return self._process_with_google(parsed_data, document_images, system_prompt, doc_type)
+        elif model_config.provider == LLMProvider.VLLM:
+            return self._process_with_vllm(parsed_data, document_images, system_prompt, doc_type)
         else:
             raise ValueError(f"Unsupported LLM provider: {model_config.provider}")
     
@@ -164,7 +185,9 @@ class LLMDocumentProcessor:
             import openai
             
             model_config = self.llm_config.models[self.model_id]
-            client = openai.OpenAI(api_key=os.getenv(model_config.api_key_env))
+            # Use provided API key or fallback to environment variable
+            api_key = self.api_keys.get("openai") or os.getenv(model_config.api_key_env)
+            client = openai.OpenAI(api_key=api_key)
             
             # Prepare messages
             messages = [
@@ -240,7 +263,9 @@ class LLMDocumentProcessor:
             import anthropic
             
             model_config = self.llm_config.models[self.model_id]
-            client = anthropic.Anthropic(api_key=os.getenv(model_config.api_key_env))
+            # Use provided API key or fallback to environment variable
+            api_key = self.api_keys.get("anthropic") or os.getenv(model_config.api_key_env)
+            client = anthropic.Anthropic(api_key=api_key)
             
             # Prepare content
             content = []
@@ -319,7 +344,9 @@ class LLMDocumentProcessor:
             import os
             
             model_config = self.llm_config.models[self.model_id]
-            genai.configure(api_key=os.getenv(model_config.api_key_env))
+            # Use provided API key or fallback to environment variable
+            api_key = self.api_keys.get("google") or os.getenv(model_config.api_key_env)
+            genai.configure(api_key=api_key)
             
             model = genai.GenerativeModel(model_config.model_name)
             
@@ -365,3 +392,184 @@ class LLMDocumentProcessor:
                 "error": str(e),
                 "processing_success": False
             }
+    
+    def _process_with_vllm(self, parsed_data: Dict[str, Any],
+                           document_images: Optional[List[Image.Image]],
+                           system_prompt: str, doc_type: str) -> Dict[str, Any]:
+        """
+        Process with vLLM (local fast inference server).
+        
+        vLLM can be used in two ways:
+        1. Direct vLLM Python client (if vllm package is installed)
+        2. OpenAI-compatible API (if vLLM server is running)
+        
+        Args:
+            parsed_data: Parsed PDF data
+            document_images: List of document page images (not supported by vLLM yet)
+            system_prompt: System prompt for the model
+            doc_type: Document type
+        
+        Returns:
+            Dictionary containing extracted data and model info
+        """
+        model_config = self.llm_config.models[self.model_id]
+        # Use provided server URL or fallback to config/environment variable
+        server_url = (
+            self.api_keys.get("vllm_server_url") or
+            model_config.vllm_server_url or 
+            os.getenv("VLLM_SERVER_URL", "http://localhost:8000")
+        )
+        
+        # Check if document_images are provided (vLLM doesn't support vision yet)
+        if document_images:
+            self.logger.warning("vLLM does not support vision models yet. Images will be ignored.")
+        
+        # Try OpenAI-compatible API first (most common setup)
+        try:
+            return self._process_with_vllm_api(parsed_data, system_prompt, doc_type, model_config, server_url)
+        except Exception as e:
+            self.logger.debug(f"vLLM API method failed: {e}, trying direct client...")
+            
+            # Fallback to direct vLLM client
+            try:
+                return self._process_with_vllm_direct(parsed_data, system_prompt, doc_type, model_config)
+            except ImportError:
+                raise ValueError(
+                    "vLLM is optional and not available. To use vLLM:\n"
+                    "  1. Install vLLM: pip install vllm\n"
+                    "  2. Or set up vLLM server with OpenAI-compatible API\n"
+                    "  3. Or use a different LLM provider (OpenAI, Anthropic, Google)\n"
+                    "See docs/vllm_setup_guide.md for details."
+                )
+            except Exception as e:
+                raise ValueError(
+                    f"vLLM processing failed: {e}\n"
+                    "vLLM is optional. Please use a different LLM provider or set up vLLM server.\n"
+                    "See docs/vllm_setup_guide.md for setup instructions."
+                )
+    
+    def _process_with_vllm_api(self, parsed_data: Dict[str, Any],
+                               system_prompt: str, doc_type: str,
+                               model_config: Any, server_url: str) -> Dict[str, Any]:
+        """Process with vLLM using OpenAI-compatible API."""
+        try:
+            from openai import OpenAI
+            
+            # Initialize OpenAI client pointing to vLLM server
+            # Use provided API key or fallback to config/environment variable
+            api_key = (
+                self.api_keys.get("vllm_api_key") or 
+                model_config.vllm_api_key or 
+                os.getenv("VLLM_API_KEY", "EMPTY")
+            )
+            client = OpenAI(
+                api_key=api_key,
+                base_url=server_url.rstrip('/') + '/v1'
+            )
+            
+            # Prepare messages
+            text_content = parsed_data.get('text', '')
+            user_message = (
+                f"Please analyze this {doc_type} document and extract structured information in JSON format:\n\n"
+                f"{text_content[:model_config.context_window - 500]}"  # Leave room for prompt
+            )
+            
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ]
+            
+            # Make API call
+            response = client.chat.completions.create(
+                model=model_config.model_name,
+                messages=messages,
+                max_tokens=model_config.max_tokens,
+                temperature=model_config.temperature,
+                response_format={"type": "json_object"}
+            )
+            
+            # Parse response
+            result = json.loads(response.choices[0].message.content)
+            
+            return {
+                "extracted_data": result,
+                "model_info": {
+                    "provider": "vllm",
+                    "model": model_config.model_name,
+                    "server_url": server_url,
+                    "tokens_used": response.usage.total_tokens if hasattr(response, 'usage') else 0,
+                    "cost_estimate": 0.0  # Free local inference
+                },
+                "processing_success": True
+            }
+            
+        except Exception as e:
+            self.logger.error(f"vLLM API processing failed: {e}")
+            raise
+    
+    def _process_with_vllm_direct(self, parsed_data: Dict[str, Any],
+                                  system_prompt: str, doc_type: str,
+                                  model_config: Any) -> Dict[str, Any]:
+        """Process with vLLM using direct Python client."""
+        try:
+            from vllm import LLM, SamplingParams
+            
+            self.logger.info(f"Using vLLM direct client with model: {model_config.model_name}")
+            
+            # Initialize vLLM (this loads the model - can be slow first time)
+            llm = LLM(model=model_config.model_name, trust_remote_code=True)
+            
+            # Prepare prompt
+            text_content = parsed_data.get('text', '')
+            prompt = (
+                f"{system_prompt}\n\n"
+                f"Please analyze this {doc_type} document and extract structured information in JSON format:\n\n"
+                f"{text_content[:model_config.context_window - 500]}\n\n"
+                f"Provide your response as valid JSON:"
+            )
+            
+            # Set sampling parameters
+            sampling_params = SamplingParams(
+                temperature=model_config.temperature,
+                max_tokens=model_config.max_tokens,
+                stop=["<|endoftext|>", "<|im_end|>"]
+            )
+            
+            # Generate response
+            outputs = llm.generate([prompt], sampling_params)
+            response_text = outputs[0].outputs[0].text.strip()
+            
+            # Try to extract JSON from response
+            try:
+                # Find JSON in response
+                json_start = response_text.find('{')
+                json_end = response_text.rfind('}')
+                if json_start >= 0 and json_end >= 0:
+                    json_str = response_text[json_start:json_end+1]
+                    result = json.loads(json_str)
+                else:
+                    result = {"extracted_text": response_text}
+            except json.JSONDecodeError:
+                result = {"extracted_text": response_text}
+            
+            return {
+                "extracted_data": result,
+                "model_info": {
+                    "provider": "vllm",
+                    "model": model_config.model_name,
+                    "method": "direct_client",
+                    "tokens_used": len(outputs[0].outputs[0].token_ids) if hasattr(outputs[0].outputs[0], 'token_ids') else 0,
+                    "cost_estimate": 0.0  # Free local inference
+                },
+                "processing_success": True
+            }
+            
+        except ImportError:
+            raise ImportError(
+                "vLLM package not installed. Install with: pip install vllm\n"
+                "Note: vLLM requires CUDA and specific hardware. "
+                "Alternatively, use vLLM server with OpenAI-compatible API."
+            )
+        except Exception as e:
+            self.logger.error(f"vLLM direct client processing failed: {e}")
+            raise
