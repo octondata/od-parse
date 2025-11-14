@@ -908,6 +908,57 @@ This library is designed for enterprise AI applications:
 - **Knowledge Bases**: Build searchable knowledge bases from document repositories with smart categorization
 - **Compliance & Audit**: Automatically detect sensitive documents (tax forms, medical records) for compliance workflows
 
+## Development
+
+### Running Tests Locally
+
+Before committing code, run the pre-commit checks to ensure everything passes:
+
+```bash
+# Run all CI checks (formatting, linting, tests)
+./scripts/pre_commit_check.sh
+
+# Or run just the tests (faster)
+./scripts/quick_test.sh
+
+# Or run tests manually
+pytest tests/ -v
+
+# Run with coverage
+pytest tests/ -v --cov=od_parse --cov-report=term-missing
+```
+
+### Pre-Commit Checks
+
+The `pre_commit_check.sh` script runs all the same checks as CI:
+
+- ✅ **Black formatting check** - Ensures code is properly formatted
+- ✅ **Flake8 linting** - Checks for code quality issues
+- ✅ **Type checking (mypy)** - Optional type checking
+- ✅ **Security scan (bandit)** - Security vulnerability scanning
+- ✅ **Tests** - Runs the full test suite with coverage
+
+### Manual Checks
+
+You can also run individual checks:
+
+```bash
+# Format code with black
+black od_parse examples
+
+# Check formatting without changing files
+black --check od_parse examples
+
+# Run linting
+flake8 od_parse
+
+# Run type checking
+mypy od_parse --ignore-missing-imports --no-strict-optional
+
+# Run security scan
+bandit -r od_parse -ll
+```
+
 ## License
 
 MIT License

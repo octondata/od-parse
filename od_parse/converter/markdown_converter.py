@@ -138,7 +138,7 @@ def format_table(table_data: Union[List[Dict[str, Any]], List[List[Any]]]) -> st
         Markdown formatted table or error message
     """
     if not table_data:
-        return "No table data available"
+        return "*No table data available*"
 
     try:
         # Handle pandas DataFrame (from tabula)

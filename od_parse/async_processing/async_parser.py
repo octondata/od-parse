@@ -59,7 +59,7 @@ class ProgressTracker:
         elapsed_time = time.time() - self.start_time
         processed_items = self.completed_items + self.failed_items
 
-        if processed_items > 0:
+        if processed_items > 0 and elapsed_time > 0:
             items_per_second = processed_items / elapsed_time
             eta = (
                 (self.total_items - processed_items) / items_per_second
@@ -67,7 +67,7 @@ class ProgressTracker:
                 else 0
             )
         else:
-            items_per_second = 0
+            items_per_second = 0.0
             eta = 0
 
         return {
