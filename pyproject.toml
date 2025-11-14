@@ -14,7 +14,7 @@ requires-python = ">=3.8"
 license = {file = "LICENSE"}
 keywords = ["pdf", "parser", "markdown", "ocr", "handwritten", "tables"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -42,8 +42,11 @@ dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/OctonData/od-parse"
-"Bug Tracker" = "https://github.com/OctonData/od-parse/issues"
+"Homepage" = "https://github.com/octondata/od-parse"
+"Documentation" = "https://github.com/octondata/od-parse#readme"
+"Repository" = "https://github.com/octondata/od-parse"
+"Bug Tracker" = "https://github.com/octondata/od-parse/issues"
+"Changelog" = "https://github.com/octondata/od-parse/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [

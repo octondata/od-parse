@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        exclude:
+          - os: windows-latest
+            python-version: "3.8"
+          - os: windows-latest
+            python-version: "3.12"
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+    
+    - name: Install system dependencies (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y tesseract-ocr poppler-utils
+    
+    - name: Install system dependencies (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install tesseract poppler || true
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+        pip install pytest pytest-cov pytest-mock
+    
+    - name: Lint with flake8
+      run: |
+        pip install flake8
+        flake8 od_parse --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 od_parse --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    
+    - name: Format check with black
+      run: |
+        pip install black
+        black --check od_parse tests
+    
+    - name: Type check with mypy
+      run: |
+        pip install mypy
+        mypy od_parse --ignore-missing-imports --no-strict-optional || true
+    
+    - name: Security check with bandit
+      run: |
+        pip install bandit
+        bandit -r od_parse -ll || true
+    
+    - name: Run tests
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'sk-test' }}
+        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY || 'AIzaSyTest' }}
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY || 'sk-ant-test' }}
+      run: |
+        pytest tests/ -v --cov=od_parse --cov-report=xml --cov-report=term-missing
+    
+    - name: Upload coverage to Codecov
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+        cache: 'pip'
+    
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build wheel
+    
+    - name: Build package
+      run: python -m build
+    
+    - name: Check package
+      run: |
+        pip install twine
+        twine check dist/*
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: dist
+        path: dist/
+

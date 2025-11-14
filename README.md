@@ -29,7 +29,7 @@ An enterprise-grade, LLM-powered library for parsing complex PDFs using state-of
 
 > **🤖 LLM Required:** od-parse now requires LLM API keys for document processing. Set up your API keys before installation.
 
-> **⚠️ Important:** `od-parse` is not yet available on PyPI. If you're getting "Could not find a version" errors, this is expected! See [INSTALL.md](INSTALL.md) for detailed installation instructions.
+> **📦 Installation:** od-parse is distributed via GitHub. Install with `pip install git+https://github.com/octondata/od-parse.git` or download wheel files from [GitHub Releases](https://github.com/octondata/od-parse/releases).
 
 ### Step 1: Set Up LLM API Keys
 
@@ -50,13 +50,24 @@ export AZURE_OPENAI_API_KEY="your-azure-key"
 export AZURE_OPENAI_ENDPOINT="your-azure-endpoint"
 ```
 
-### Step 2: Development Installation
+### Step 2: Installation
 
-Since `od-parse` is currently in active development and not yet published to PyPI, install from source:
+**Option 1: Install from GitHub (Recommended)** ⭐
+```bash
+pip install git+https://github.com/octondata/od-parse.git
+```
+
+**Option 2: Install from Wheel File (From GitHub Releases)**
+```bash
+# Download wheel from: https://github.com/octondata/od-parse/releases
+pip install od_parse-0.2.0-py3-none-any.whl
+```
+
+**Option 3: Install from Source (For Development)**
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/od-parse.git
+git clone https://github.com/octondata/od-parse.git
 cd od-parse
 
 # Create a virtual environment (recommended)
@@ -71,13 +82,15 @@ pip install -e .[advanced]
 pip install -e .[all]
 ```
 
+> **💡 Note:** See [docs/INSTALLATION_METHODS.md](docs/INSTALLATION_METHODS.md) for all installation methods and best practices.
+
 ### Quick Setup Script
 
 For convenience, you can use the automated setup script:
 
 ```bash
 # Clone and run setup script
-git clone https://github.com/your-username/od-parse.git
+git clone https://github.com/octondata/od-parse.git
 cd od-parse
 chmod +x setup_dev.sh
 ./setup_dev.sh
@@ -96,7 +109,7 @@ If you don't have git, you can download and install directly:
 
 ```bash
 # Download the source code
-wget https://github.com/your-username/od-parse/archive/main.zip
+wget https://github.com/octondata/od-parse/archive/main.zip
 unzip main.zip
 cd od-parse-main
 
