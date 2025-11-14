@@ -45,8 +45,9 @@ def convert_to_markdown(parsed_data: Dict[str, Any], **kwargs) -> str:
     if include_images and "images" in parsed_data and parsed_data["images"]:
         markdown.append("## Images\n")
         for i, img_path in enumerate(parsed_data["images"]):
-            img_path = Path(img_path)
-            markdown.append(f"![Image {i+1}]({img_path})\n")
+            # Convert path to use forward slashes for Markdown/URL compatibility
+            img_path_str = str(Path(img_path)).replace("\\", "/")
+            markdown.append(f"![Image {i+1}]({img_path_str})\n")
         markdown.append("\n")
 
     # Add tables
