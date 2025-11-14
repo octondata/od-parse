@@ -152,7 +152,9 @@ class AdvancedConfig:
         }
 
     def enable_feature(
-        self, feature_name: str, check_dependencies: bool = True
+        self,
+        feature_name: str,
+        check_dependencies: bool = True,
     ) -> bool:
         """
         Enable a specific feature.
