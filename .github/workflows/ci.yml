@@ -55,7 +55,7 @@ jobs:
     
     - name: Format check with black
       run: |
-        pip install black
+        # Black is already installed via [dev] dependencies
         black --check od_parse examples
     
     - name: Type check with mypy
