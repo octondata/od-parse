@@ -143,8 +143,6 @@ def get_config(key: Optional[str] = None, default: Any = None) -> Any:
     Returns:
         Configuration value
     """
-    global _CONFIG
-    
     # Load config if not already loaded
     if not _CONFIG:
         load_config()

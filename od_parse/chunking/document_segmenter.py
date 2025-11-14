@@ -10,7 +10,6 @@ import numpy as np
 import pdfplumber
 import pdf2image
 
-class DocumentSegmenter:
 
 class DocumentSegmenter:
     """

@@ -59,12 +59,14 @@ class TrOCREngine:
         """Initialize TrOCR model and processor."""
         config = get_advanced_config()
         
+        # Auto-enable TrOCR feature if not enabled (for convenience)
         if not config.is_feature_enabled("trocr"):
-            self.logger.info("TrOCR feature is disabled. Use config.enable_feature('trocr') to enable.")
-            return False
+            self.logger.info("TrOCR feature not enabled. Auto-enabling...")
+            config.enable_feature('trocr', check_dependencies=False)
         
         if not config.is_feature_available("trocr"):
-            self.logger.warning("TrOCR dependencies not available. Install with: pip install od-parse[trocr]")
+            self.logger.warning("TrOCR dependencies not available. Install with: pip install torch transformers")
+            self.logger.info("Will fallback to Tesseract OCR if available")
             return False
         
         try:

@@ -13,12 +13,18 @@ from pdfminer.layout import LAParams, LTTextContainer, LTImage, LTFigure
 from pdfminer.converter import PDFPageAggregator
 from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
 from pdfminer.pdfpage import PDFPage
-from pdfminer.pdfpage import PDFPage
 import pdf2image
 import cv2
 import numpy as np
 import re
 import time
+
+from od_parse.ocr import extract_handwritten_content
+from od_parse.utils.file_utils import validate_file
+from od_parse.utils.logging_utils import get_logger
+from od_parse.utils.text_normalizer import normalize_ocr_spacing
+
+logger = get_logger(__name__)
 
 # Try to import pdfplumber for table extraction (pure Python, no Java needed)
 try:
@@ -27,13 +33,6 @@ try:
 except ImportError:
     PDFPLUMBER_AVAILABLE = False
     logger.warning("pdfplumber not available. Table extraction will be limited. Install with: pip install pdfplumber")
-
-from od_parse.ocr import extract_handwritten_content
-from od_parse.utils.file_utils import validate_file
-from od_parse.utils.logging_utils import get_logger
-from od_parse.utils.text_normalizer import normalize_ocr_spacing
-
-logger = get_logger(__name__)
 
 
 MIN_TEXT_LENGTH = 10
