@@ -13,9 +13,8 @@ from od_parse.agents.cache_agent import CacheAgent
 from od_parse.agents.resource_agent import ResourceAgent
 
 __all__ = [
-    'ParsingAgent',
-    'ProcessingStrategy',
-    'CacheAgent',
-    'ResourceAgent',
+    "ParsingAgent",
+    "ProcessingStrategy",
+    "CacheAgent",
+    "ResourceAgent",
 ]
-

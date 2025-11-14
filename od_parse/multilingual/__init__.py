@@ -8,11 +8,11 @@ processing, including language detection, text processing, and translation.
 from od_parse.multilingual.language_processor import (
     MultilingualProcessor,
     detect_document_language,
-    process_multilingual_document
+    process_multilingual_document,
 )
 
 __all__ = [
     "MultilingualProcessor",
     "detect_document_language",
-    "process_multilingual_document"
+    "process_multilingual_document",
 ]

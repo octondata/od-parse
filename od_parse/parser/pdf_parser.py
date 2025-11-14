@@ -29,18 +29,21 @@ logger = get_logger(__name__)
 # Try to import pdfplumber for table extraction (pure Python, no Java needed)
 try:
     import pdfplumber
+
     PDFPLUMBER_AVAILABLE = True
 except ImportError:
     PDFPLUMBER_AVAILABLE = False
-    logger.warning("pdfplumber not available. Table extraction will be limited. Install with: pip install pdfplumber")
+    logger.warning(
+        "pdfplumber not available. Table extraction will be limited. Install with: pip install pdfplumber"
+    )
 
 
 MIN_TEXT_LENGTH = 10
 MIN_ALPHA_RATIO = 0.5
 MIN_VALID_WORDS = 3
 MAX_GARBAGE_RATIO = 0.1
-VALID_WORD_REGEX = re.compile(r'[a-zA-Z]{3,}')
-GARBAGE_CHARS = frozenset('<>;()[]{}@#$%^&*')
+VALID_WORD_REGEX = re.compile(r"[a-zA-Z]{3,}")
+GARBAGE_CHARS = frozenset("<>;()[]{}@#$%^&*")
 
 
 def calculate_alpha_ratio(text: str) -> float:
@@ -107,7 +110,9 @@ def is_readable_text(text: str) -> bool:
     return True
 
 
-def parse_pdf(file_path: Union[str, Path], use_ocr: bool = True, **kwargs) -> Dict[str, Any]:
+def parse_pdf(
+    file_path: Union[str, Path], use_ocr: bool = True, **kwargs
+) -> Dict[str, Any]:
     """
     Parse a PDF file and extract its content.
 
@@ -121,20 +126,22 @@ def parse_pdf(file_path: Union[str, Path], use_ocr: bool = True, **kwargs) -> Di
     Returns:
         Dictionary containing extracted content
     """
-    file_path = validate_file(file_path, extension='.pdf')
+    file_path = validate_file(file_path, extension=".pdf")
     logger.info(f"Parsing PDF file: {file_path}")
 
     # Get document metadata
     page_count = "unknown"
     try:
-        with open(file_path, 'rb') as file:
+        with open(file_path, "rb") as file:
             page_count = len(list(PDFPage.get_pages(file)))
             logger.info(f"Page count: {page_count}")
     except Exception as e:
         logger.warning(f"Could not determine page count: {e}")
 
     # Run extraction steps
-    text = _run_extraction_step("Text", extract_text, file_path, use_ocr_fallback=use_ocr)
+    text = _run_extraction_step(
+        "Text", extract_text, file_path, use_ocr_fallback=use_ocr
+    )
     images = _run_extraction_step("Images", extract_images, file_path)
     tables = _run_extraction_step("Tables", extract_tables, file_path)
     forms = _run_extraction_step("Forms", extract_forms, file_path)
@@ -153,16 +160,16 @@ def parse_pdf(file_path: Union[str, Path], use_ocr: bool = True, **kwargs) -> Di
         "tables_found": len(tables),
         "forms_found": len(forms),
         "images_found": len(images),
-        "handwritten_items_found": len(handwritten_content)
+        "handwritten_items_found": len(handwritten_content),
     }
 
     return {
-        'text': text,
-        'images': images,
-        'tables': tables,
-        'forms': forms,
-        'handwritten_content': handwritten_content,
-        'metadata': metadata
+        "text": text,
+        "images": images,
+        "tables": tables,
+        "forms": forms,
+        "handwritten_content": handwritten_content,
+        "metadata": metadata,
     }
 
 
@@ -173,13 +180,16 @@ def _run_extraction_step(step_name: str, extraction_func, *args, **kwargs):
         result = extraction_func(*args, **kwargs)
         elapsed_time = time.time() - start_time
         result_count = len(result) if isinstance(result, (list, str)) else 0
-        logger.info(f"✅ {step_name} extraction completed: {result_count} items in {elapsed_time:.2f}s")
+        logger.info(
+            f"✅ {step_name} extraction completed: {result_count} items in {elapsed_time:.2f}s"
+        )
         return result
     except Exception as e:
         elapsed_time = time.time() - start_time
         logger.error(f"✗ {step_name} extraction failed after {elapsed_time:.2f}s: {e}")
         # Return a default value based on expected type
         return "" if "text" in step_name.lower() else []
+
 
 def extract_text(file_path: Union[str, Path], use_ocr_fallback: bool = True) -> str:
     """
@@ -202,42 +212,50 @@ def extract_text(file_path: Union[str, Path], use_ocr_fallback: bool = True) -> 
         # Clean the text for better JSON compatibility
         if raw_text:
             # Replace problematic unicode characters
-            cleaned_text = raw_text.replace('\u2013', '-')  # em dash
-            cleaned_text = cleaned_text.replace('\u2014', '--')  # en dash
-            cleaned_text = cleaned_text.replace('\u2019', "'")  # right single quotation
-            cleaned_text = cleaned_text.replace('\u201c', '"')  # left double quotation
-            cleaned_text = cleaned_text.replace('\u201d', '"')  # right double quotation
-            cleaned_text = cleaned_text.replace('\u00a0', ' ')  # non-breaking space
+            cleaned_text = raw_text.replace("\u2013", "-")  # em dash
+            cleaned_text = cleaned_text.replace("\u2014", "--")  # en dash
+            cleaned_text = cleaned_text.replace("\u2019", "'")  # right single quotation
+            cleaned_text = cleaned_text.replace("\u201c", '"')  # left double quotation
+            cleaned_text = cleaned_text.replace("\u201d", '"')  # right double quotation
+            cleaned_text = cleaned_text.replace("\u00a0", " ")  # non-breaking space
 
             # Remove excessive whitespace
-            cleaned_text = ' '.join(cleaned_text.split())
+            cleaned_text = " ".join(cleaned_text.split())
 
             # Check if pdfminer text is readable FIRST (before CID check)
             pdfminer_is_readable = is_readable_text(cleaned_text)
 
             # If text is unreadable (garbage), skip to OCR immediately
             if not pdfminer_is_readable and use_ocr_fallback:
-                logger.warning(f"⚠️  pdfminer extracted garbage text (not readable) - going straight to OCR")
+                logger.warning(
+                    f"⚠️  pdfminer extracted garbage text (not readable) - going straight to OCR"
+                )
                 logger.debug(f"📝 Garbage sample: {cleaned_text[:200]}")
                 ocr_text = extract_text_with_ocr(file_path)
                 if ocr_text and len(ocr_text.strip()) > 10:
                     ocr_alpha_ratio = calculate_alpha_ratio(ocr_text)
                     ocr_is_readable = is_readable_text(ocr_text)
-                    logger.info(f"✅ OCR produced text: {len(ocr_text)} chars, alpha_ratio={ocr_alpha_ratio:.2f}, readable={ocr_is_readable}")
+                    logger.info(
+                        f"✅ OCR produced text: {len(ocr_text)} chars, alpha_ratio={ocr_alpha_ratio:.2f}, readable={ocr_is_readable}"
+                    )
                     return ocr_text
                 else:
-                    logger.warning(f"OCR didn't produce usable text, returning pdfminer text")
+                    logger.warning(
+                        f"OCR didn't produce usable text, returning pdfminer text"
+                    )
                     return cleaned_text
 
             # Check for CID codes (character identifier codes from embedded fonts)
             # CID codes appear as "(cid:XXX)" in the extracted text
-            cid_count = cleaned_text.count('(cid:')
+            cid_count = cleaned_text.count("(cid:")
 
             # If more than 10% of content is CID codes, the PDF has encoding issues
             if cid_count > 10 and len(cleaned_text) > 0:
                 cid_ratio = cid_count / (len(cleaned_text) / 100)  # Approximate ratio
                 if cid_ratio > 0.1:  # More than 10% CID codes
-                    logger.warning(f"⚠️  Detected {cid_count} CID codes in extracted text - PDF has font encoding issues")
+                    logger.warning(
+                        f"⚠️  Detected {cid_count} CID codes in extracted text - PDF has font encoding issues"
+                    )
 
                     # Try PyMuPDF first (often handles CID fonts better)
                     logger.info(f"Trying PyMuPDF as alternative text extractor...")
@@ -245,21 +263,27 @@ def extract_text(file_path: Union[str, Path], use_ocr_fallback: bool = True) -> 
 
                     # Check if PyMuPDF produced better results (fewer CID codes AND good quality)
                     if pymupdf_text:
-                        pymupdf_cid_count = pymupdf_text.count('(cid:')
+                        pymupdf_cid_count = pymupdf_text.count("(cid:")
                         pymupdf_alpha_ratio = calculate_alpha_ratio(pymupdf_text)
                         pymupdf_is_readable = is_readable_text(pymupdf_text)
 
-                        logger.info(f"📊 PyMuPDF quality check: cid={pymupdf_cid_count} (vs {cid_count}), alpha_ratio={pymupdf_alpha_ratio:.2f}, readable={pymupdf_is_readable}")
+                        logger.info(
+                            f"📊 PyMuPDF quality check: cid={pymupdf_cid_count} (vs {cid_count}), alpha_ratio={pymupdf_alpha_ratio:.2f}, readable={pymupdf_is_readable}"
+                        )
                         logger.debug(f"📝 PyMuPDF sample text: {pymupdf_text[:200]}")
 
                         # Only accept PyMuPDF result if it has:
                         # 1. Fewer CID codes than pdfminer
                         # 2. Text is actually readable (not garbage like "4<2/,91,,")
                         if pymupdf_cid_count < cid_count and pymupdf_is_readable:
-                            logger.info(f"✅ PyMuPDF produced readable text: {pymupdf_cid_count} CID codes vs {cid_count}, alpha_ratio={pymupdf_alpha_ratio:.2f}")
+                            logger.info(
+                                f"✅ PyMuPDF produced readable text: {pymupdf_cid_count} CID codes vs {cid_count}, alpha_ratio={pymupdf_alpha_ratio:.2f}"
+                            )
                             return pymupdf_text
                         else:
-                            logger.warning(f"⚠️  PyMuPDF text not readable (garbage detected) - will try OCR")
+                            logger.warning(
+                                f"⚠️  PyMuPDF text not readable (garbage detected) - will try OCR"
+                            )
 
                     # If PyMuPDF didn't help, try OCR as last resort
                     if use_ocr_fallback:
@@ -267,10 +291,14 @@ def extract_text(file_path: Union[str, Path], use_ocr_fallback: bool = True) -> 
                         ocr_text = extract_text_with_ocr(file_path)
                         if ocr_text and len(ocr_text.strip()) > 10:
                             ocr_alpha_ratio = calculate_alpha_ratio(ocr_text)
-                            logger.info(f"✅ OCR produced text: {len(ocr_text)} chars, alpha_ratio={ocr_alpha_ratio:.2f}")
+                            logger.info(
+                                f"✅ OCR produced text: {len(ocr_text)} chars, alpha_ratio={ocr_alpha_ratio:.2f}"
+                            )
                             return ocr_text
                         else:
-                            logger.warning(f"OCR didn't produce usable text, returning pdfminer text")
+                            logger.warning(
+                                f"OCR didn't produce usable text, returning pdfminer text"
+                            )
                             return cleaned_text
 
             # Check if we got meaningful text (more than just whitespace/special chars)
@@ -282,14 +310,20 @@ def extract_text(file_path: Union[str, Path], use_ocr_fallback: bool = True) -> 
         # Try multiple fallback methods
         if use_ocr_fallback:
             # First try PyMuPDF (faster than OCR)
-            logger.info(f"No text found with pdfminer, trying PyMuPDF for scanned PDF: {file_path}")
+            logger.info(
+                f"No text found with pdfminer, trying PyMuPDF for scanned PDF: {file_path}"
+            )
             pymupdf_text = extract_text_with_pymupdf(file_path)
             if pymupdf_text and len(pymupdf_text.strip()) > 10:
-                logger.info(f"✅ Extracted {len(pymupdf_text)} characters using PyMuPDF")
+                logger.info(
+                    f"✅ Extracted {len(pymupdf_text)} characters using PyMuPDF"
+                )
                 return pymupdf_text
 
             # If PyMuPDF didn't work, try OCR
-            logger.info(f"PyMuPDF didn't extract text, attempting OCR for scanned PDF: {file_path}")
+            logger.info(
+                f"PyMuPDF didn't extract text, attempting OCR for scanned PDF: {file_path}"
+            )
             ocr_text = extract_text_with_ocr(file_path)
             if ocr_text and len(ocr_text.strip()) > 0:
                 logger.info(f"✅ Extracted {len(ocr_text)} characters using OCR")
@@ -297,7 +331,9 @@ def extract_text(file_path: Union[str, Path], use_ocr_fallback: bool = True) -> 
             else:
                 logger.warning(f"⚠️  OCR extraction returned no text for {file_path}")
                 logger.warning(f"⚠️  This may be due to missing Tesseract installation")
-                logger.warning(f"⚠️  Install Tesseract: brew install tesseract (macOS) or apt-get install tesseract-ocr (Linux)")
+                logger.warning(
+                    f"⚠️  Install Tesseract: brew install tesseract (macOS) or apt-get install tesseract-ocr (Linux)"
+                )
 
         return ""
     except Exception as e:
@@ -333,31 +369,37 @@ def extract_text_with_pymupdf(file_path: Union[str, Path]) -> str:
 
         doc.close()
 
-        combined_text = ' '.join(all_text)
+        combined_text = " ".join(all_text)
 
         # Clean the text
         if combined_text:
-            cleaned_text = ' '.join(combined_text.split())
+            cleaned_text = " ".join(combined_text.split())
 
             # Only normalize if text quality is good (check alpha ratio and CID codes)
             alpha_ratio = calculate_alpha_ratio(cleaned_text)
-            cid_count = cleaned_text.count('(cid:')
+            cid_count = cleaned_text.count("(cid:")
 
             # Normalize only if:
             # 1. Alpha ratio is reasonable (> 0.3 = 30% alphabetic)
             # 2. Not too many CID codes (< 10)
             if alpha_ratio > 0.3 and cid_count < 10:
                 cleaned_text = normalize_ocr_spacing(cleaned_text)
-                logger.debug(f"PyMuPDF text normalized and cleaned ({len(cleaned_text)} chars, alpha_ratio={alpha_ratio:.2f})")
+                logger.debug(
+                    f"PyMuPDF text normalized and cleaned ({len(cleaned_text)} chars, alpha_ratio={alpha_ratio:.2f})"
+                )
             else:
-                logger.debug(f"PyMuPDF text NOT normalized (alpha_ratio={alpha_ratio:.2f}, cid_count={cid_count})")
+                logger.debug(
+                    f"PyMuPDF text NOT normalized (alpha_ratio={alpha_ratio:.2f}, cid_count={cid_count})"
+                )
 
             return cleaned_text
 
         return ""
 
     except ImportError:
-        logger.warning("PyMuPDF (fitz) not available. Install with: pip install PyMuPDF")
+        logger.warning(
+            "PyMuPDF (fitz) not available. Install with: pip install PyMuPDF"
+        )
         return ""
     except Exception as e:
         logger.error(f"Error during PyMuPDF extraction from {file_path}: {e}")
@@ -406,13 +448,13 @@ def extract_text_with_ocr(file_path: Union[str, Path]) -> str:
                 new_width = int(width * scale_factor)
                 new_height = int(height * scale_factor)
 
-                logger.info(f"📐 Upscaling low-res image from {width}x{height} to {new_width}x{new_height} ({scale_factor:.1f}x)")
+                logger.info(
+                    f"📐 Upscaling low-res image from {width}x{height} to {new_width}x{new_height} ({scale_factor:.1f}x)"
+                )
 
                 # Use INTER_CUBIC for upscaling (better quality than INTER_LINEAR)
                 gray = cv2.resize(
-                    gray,
-                    (new_width, new_height),
-                    interpolation=cv2.INTER_CUBIC
+                    gray, (new_width, new_height), interpolation=cv2.INTER_CUBIC
                 )
 
             # 2. ENHANCE CONTRAST (CLAHE)
@@ -428,7 +470,7 @@ def extract_text_with_ocr(file_path: Union[str, Path]) -> str:
                 gray,
                 h=10,  # Filter strength (higher = more denoising)
                 templateWindowSize=7,
-                searchWindowSize=21
+                searchWindowSize=21,
             )
             logger.debug("🧹 Applied denoising")
 
@@ -461,7 +503,7 @@ def extract_text_with_ocr(file_path: Union[str, Path]) -> str:
                         M,
                         (w, h),
                         flags=cv2.INTER_CUBIC,
-                        borderMode=cv2.BORDER_REPLICATE
+                        borderMode=cv2.BORDER_REPLICATE,
                     )
 
             # 6. ADAPTIVE THRESHOLDING
@@ -473,7 +515,7 @@ def extract_text_with_ocr(file_path: Union[str, Path]) -> str:
                 cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
                 cv2.THRESH_BINARY,
                 11,  # Block size
-                2    # Constant subtracted from mean
+                2,  # Constant subtracted from mean
             )
             logger.debug("⚫⚪ Applied adaptive thresholding")
 
@@ -491,17 +533,19 @@ def extract_text_with_ocr(file_path: Union[str, Path]) -> str:
             # --oem 3: Use default OCR Engine Mode (LSTM + Legacy)
             # --psm 1: Automatic page segmentation with OSD (Orientation and Script Detection)
             # -c tessedit_char_whitelist: Limit to common characters (optional, commented out)
-            custom_config = r'--oem 3 --psm 1'
+            custom_config = r"--oem 3 --psm 1"
 
             # Try OCR with the processed image
             page_text = pytesseract.image_to_string(processed_img, config=custom_config)
 
             # If OCR returns very little text or garbage, try alternative PSM modes
             if len(page_text.strip()) < 10 or calculate_alpha_ratio(page_text) < 0.3:
-                logger.warning(f"⚠️  Low-quality OCR result on page {i+1}, trying alternative PSM mode...")
+                logger.warning(
+                    f"⚠️  Low-quality OCR result on page {i+1}, trying alternative PSM mode..."
+                )
 
                 # Try PSM 3 (Fully automatic page segmentation, but no OSD)
-                alt_config = r'--oem 3 --psm 3'
+                alt_config = r"--oem 3 --psm 3"
                 alt_text = pytesseract.image_to_string(processed_img, config=alt_config)
 
                 # Use alternative if it's better
@@ -513,12 +557,12 @@ def extract_text_with_ocr(file_path: Union[str, Path]) -> str:
                 all_text.append(f"--- Page {i+1} ---\n{page_text.strip()}")
 
         # Combine all pages
-        combined_text = '\n\n'.join(all_text)
+        combined_text = "\n\n".join(all_text)
 
         # Clean the text
         if combined_text:
             # Additional whitespace normalization
-            cleaned_text = ' '.join(combined_text.split())
+            cleaned_text = " ".join(combined_text.split())
 
             # Only normalize if text quality is good (check alpha ratio)
             alpha_ratio = calculate_alpha_ratio(cleaned_text)
@@ -527,9 +571,13 @@ def extract_text_with_ocr(file_path: Union[str, Path]) -> str:
             # OCR should produce mostly alphabetic text, not garbage
             if alpha_ratio > 0.3:
                 cleaned_text = normalize_ocr_spacing(cleaned_text)
-                logger.info(f"✅ OCR text normalized and cleaned ({len(cleaned_text)} chars, alpha_ratio={alpha_ratio:.2f})")
+                logger.info(
+                    f"✅ OCR text normalized and cleaned ({len(cleaned_text)} chars, alpha_ratio={alpha_ratio:.2f})"
+                )
             else:
-                logger.warning(f"⚠️  OCR text quality too low for normalization (alpha_ratio={alpha_ratio:.2f})")
+                logger.warning(
+                    f"⚠️  OCR text quality too low for normalization (alpha_ratio={alpha_ratio:.2f})"
+                )
 
             return cleaned_text
 
@@ -541,21 +589,27 @@ def extract_text_with_ocr(file_path: Union[str, Path]) -> str:
         return ""
     except Exception as e:
         error_msg = str(e)
-        if "tesseract is not installed" in error_msg.lower() or "not in your path" in error_msg.lower():
+        if (
+            "tesseract is not installed" in error_msg.lower()
+            or "not in your path" in error_msg.lower()
+        ):
             logger.error(f"❌ Tesseract OCR is not installed on your system")
             logger.error(f"💡 Install Tesseract:")
             logger.error(f"   macOS:   brew install tesseract")
             logger.error(f"   Ubuntu:  sudo apt-get install tesseract-ocr")
-            logger.error(f"   Windows: Download from https://github.com/UB-Mannheim/tesseract/wiki")
+            logger.error(
+                f"   Windows: Download from https://github.com/UB-Mannheim/tesseract/wiki"
+            )
         else:
             logger.error(f"❌ Error during OCR extraction from {file_path}: {e}")
         return ""
+
 
 def extract_images(
     file_path: Union[str, Path],
     output_dir: Optional[str] = None,
     max_pages: Optional[int] = None,
-    dpi: int = 200
+    dpi: int = 200,
 ) -> List[str]:
     """
     Extract images from a PDF file.
@@ -579,34 +633,39 @@ def extract_images(
         # Convert PDF pages to images
         # Limit pages if max_pages is specified
         if max_pages:
-            images = pdf2image.convert_from_path(file_path, dpi=dpi, last_page=max_pages)
+            images = pdf2image.convert_from_path(
+                file_path, dpi=dpi, last_page=max_pages
+            )
         else:
             images = pdf2image.convert_from_path(file_path, dpi=dpi)
         image_paths = []
-        
+
         for i, img in enumerate(images):
             img_path = os.path.join(output_dir, f"page_{i+1}.png")
             img.save(img_path, "PNG")
             image_paths.append(img_path)
-            
+
             # Use OpenCV to detect and extract embedded images
             cv_img = cv2.imread(img_path)
             gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
             _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY_INV)
-            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
+            contours, _ = cv2.findContours(
+                thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+            )
+
             for j, contour in enumerate(contours):
                 if cv2.contourArea(contour) > 10000:  # Filter small contours
                     x, y, w, h = cv2.boundingRect(contour)
-                    cropped = cv_img[y:y+h, x:x+w]
+                    cropped = cv_img[y : y + h, x : x + w]
                     crop_path = os.path.join(output_dir, f"page_{i+1}_img_{j+1}.png")
                     cv2.imwrite(crop_path, cropped)
                     image_paths.append(crop_path)
-        
+
         return image_paths
     except Exception as e:
         logger.error(f"Error extracting images from {file_path}: {e}")
         return []
+
 
 def extract_tables(file_path: Union[str, Path]) -> List[Dict[str, Any]]:
     """
@@ -662,11 +721,13 @@ def extract_tables(file_path: Union[str, Path]) -> List[Dict[str, Any]]:
 
                         for header, value in zip(clean_headers, row):
                             # Clean the value
-                            if value is None or (isinstance(value, str) and not value.strip()):
+                            if value is None or (
+                                isinstance(value, str) and not value.strip()
+                            ):
                                 clean_value = None
                             elif isinstance(value, str):
                                 clean_value = value.strip()
-                                if clean_value.lower() in ['nan', 'none', '']:
+                                if clean_value.lower() in ["nan", "none", ""]:
                                     clean_value = None
                                 else:
                                     has_content = True
@@ -681,13 +742,15 @@ def extract_tables(file_path: Union[str, Path]) -> List[Dict[str, Any]]:
                             cleaned_rows.append(cleaned_row)
 
                     if cleaned_rows:  # Only add table if it has content
-                        cleaned_tables.append({
-                            "data": cleaned_rows,
-                            "shape": (len(cleaned_rows), len(clean_headers)),
-                            "page": page_num + 1,
-                            "table_index": table_idx,
-                            "confidence": 0.85  # pdfplumber is quite reliable
-                        })
+                        cleaned_tables.append(
+                            {
+                                "data": cleaned_rows,
+                                "shape": (len(cleaned_rows), len(clean_headers)),
+                                "page": page_num + 1,
+                                "table_index": table_idx,
+                                "confidence": 0.85,  # pdfplumber is quite reliable
+                            }
+                        )
 
         if cleaned_tables:
             logger.info(f"✅ Extracted {len(cleaned_tables)} tables from {file_path}")
@@ -700,13 +763,14 @@ def extract_tables(file_path: Union[str, Path]) -> List[Dict[str, Any]]:
         logger.error(f"❌ Error extracting tables from {file_path}: {e}")
         return []
 
+
 def extract_forms(file_path: Union[str, Path]) -> List[Dict[str, Any]]:
     """
     Extract form elements (checkboxes, radio buttons, text fields) from a PDF file.
-    
+
     Args:
         file_path: Path to the PDF file
-    
+
     Returns:
         List of extracted form elements as dictionaries
     """
@@ -714,34 +778,44 @@ def extract_forms(file_path: Union[str, Path]) -> List[Dict[str, Any]]:
         # This is a simplified implementation
         # In a real-world scenario, you would use a library like PyPDF2 or pdfrw
         # to extract form fields
-        
+
         form_elements = []
-        
+
         # Open the PDF file
-        with open(file_path, 'rb') as file:
+        with open(file_path, "rb") as file:
             # Create a PDF resource manager and page aggregator
             resource_manager = PDFResourceManager()
             laparams = LAParams()
             device = PDFPageAggregator(resource_manager, laparams=laparams)
             interpreter = PDFPageInterpreter(resource_manager, device)
-            
+
             # Process each page
             for page_num, page in enumerate(PDFPage.get_pages(file)):
                 interpreter.process_page(page)
                 layout = device.get_result()
-                
+
                 # Look for potential form elements
                 for element in layout:
                     if isinstance(element, LTTextContainer):
                         text = element.get_text().strip().lower()
-                        if any(keyword in text for keyword in ['check', 'select', 'choose', 'click']):
-                            form_elements.append({
-                                'type': 'potential_form_field',
-                                'page': page_num + 1,
-                                'text': text,
-                                'bbox': (element.x0, element.y0, element.x1, element.y1)
-                            })
-        
+                        if any(
+                            keyword in text
+                            for keyword in ["check", "select", "choose", "click"]
+                        ):
+                            form_elements.append(
+                                {
+                                    "type": "potential_form_field",
+                                    "page": page_num + 1,
+                                    "text": text,
+                                    "bbox": (
+                                        element.x0,
+                                        element.y0,
+                                        element.x1,
+                                        element.y1,
+                                    ),
+                                }
+                            )
+
         return form_elements
     except Exception as e:
         logger.error(f"Error extracting form elements from {file_path}: {e}")

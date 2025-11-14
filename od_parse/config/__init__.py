@@ -8,7 +8,7 @@ from od_parse.config.advanced_config import (
     FeatureConfig,
     FeatureLevel,
     get_config as get_advanced_config,
-    configure_features
+    configure_features,
 )
 
 __all__ = [
@@ -18,5 +18,5 @@ __all__ = [
     "FeatureConfig",
     "FeatureLevel",
     "get_advanced_config",
-    "configure_features"
+    "configure_features",
 ]

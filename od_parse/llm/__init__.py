@@ -7,6 +7,4 @@ for complex PDF understanding and structured data extraction.
 
 from od_parse.llm.document_processor import LLMDocumentProcessor
 
-__all__ = [
-    "LLMDocumentProcessor"
-]
+__all__ = ["LLMDocumentProcessor"]

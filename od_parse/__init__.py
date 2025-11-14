@@ -15,16 +15,14 @@ from od_parse.converter import convert_to_markdown
 
 # Agentic AI features (v0.2.0+)
 try:
-    from od_parse.parser.optimized_parser import (
-        OptimizedPDFParser,
-        parse_pdf_optimized
-    )
+    from od_parse.parser.optimized_parser import OptimizedPDFParser, parse_pdf_optimized
     from od_parse.agents import (
         ParsingAgent,
         CacheAgent,
         ResourceAgent,
-        ProcessingStrategy
+        ProcessingStrategy,
     )
+
     AGENTIC_AVAILABLE = True
 except ImportError:
     AGENTIC_AVAILABLE = False
@@ -39,18 +37,16 @@ __version__ = "0.2.0"
 
 __all__ = [
     # Core functions
-    'parse_pdf',
-    'convert_to_markdown',
-
+    "parse_pdf",
+    "convert_to_markdown",
     # Agentic AI features (v0.2.0+)
-    'OptimizedPDFParser',
-    'parse_pdf_optimized',
-    'ParsingAgent',
-    'CacheAgent',
-    'ResourceAgent',
-    'ProcessingStrategy',
-    'AGENTIC_AVAILABLE',
-
+    "OptimizedPDFParser",
+    "parse_pdf_optimized",
+    "ParsingAgent",
+    "CacheAgent",
+    "ResourceAgent",
+    "ProcessingStrategy",
+    "AGENTIC_AVAILABLE",
     # Version
-    '__version__',
+    "__version__",
 ]

@@ -15,7 +15,7 @@ result = parse_pdf(
     "your_document.pdf",  # Replace with your PDF path
     llm_model="gemini-2.0-flash",  # Google Gemini model
     api_keys={"google": "YOUR_GOOGLE_API_KEY"},  # Or use env var
-    output_format="json"
+    output_format="json",
 )
 
 # Step 3: Access the results
@@ -25,4 +25,3 @@ print(f"✅ Found {len(result['parsed_data']['tables'])} tables")
 print(f"✅ Found {len(result['parsed_data']['forms'])} forms")
 
 # That's it! You're ready to use od-parse 🎉
-

@@ -1,4 +1,3 @@
-
 """
 This module contains the DocumentSegmenter class, which is responsible for
 detecting boundaries between different logical documents within a single PDF file.
@@ -14,7 +13,7 @@ import pdf2image
 class DocumentSegmenter:
     """
     Analyzes a PDF to find boundaries between distinct documents.
-    
+
     Uses a hybrid approach:
     1. Fast, lightweight fingerprinting of pages using traditional libraries.
     2. An LLM tie-breaker for ambiguous cases.
@@ -58,7 +57,9 @@ class DocumentSegmenter:
         fingerprints = []
         with pdfplumber.open(file_path) as pdf:
             if len(images) != len(pdf.pages):
-                raise ValueError("Page count mismatch between pdf2image and pdfplumber.")
+                raise ValueError(
+                    "Page count mismatch between pdf2image and pdfplumber."
+                )
 
             for i, page in enumerate(pdf.pages):
                 # pdfplumber text, pdf2image image
@@ -66,7 +67,7 @@ class DocumentSegmenter:
                 image = np.array(images[i])
                 fp = self._get_page_fingerprint(image, text)
                 fingerprints.append(fp)
-        
+
         if not fingerprints:
             return []
 
@@ -74,7 +75,7 @@ class DocumentSegmenter:
         boundaries = [0]
         for i in range(len(fingerprints) - 1):
             fp1 = fingerprints[i]
-            fp2 = fingerprints[i+1]
+            fp2 = fingerprints[i + 1]
             similarity = self._calculate_similarity(fp1, fp2)
 
             # TODO: Add logic for the LLM tie-breaker here for ambiguous cases.
@@ -86,15 +87,19 @@ class DocumentSegmenter:
         chunks = []
         for i in range(len(boundaries)):
             start_page_idx = boundaries[i]
-            end_page_idx = boundaries[i+1] if i + 1 < len(boundaries) else len(fingerprints)
+            end_page_idx = (
+                boundaries[i + 1] if i + 1 < len(boundaries) else len(fingerprints)
+            )
             # Page numbers are 1-based, so add 1 to indices
             chunks.append(list(range(start_page_idx + 1, end_page_idx + 1)))
 
         return chunks
 
-    def _get_page_fingerprint(self, page_image: np.ndarray, page_text: str) -> Dict[str, Any]:
+    def _get_page_fingerprint(
+        self, page_image: np.ndarray, page_text: str
+    ) -> Dict[str, Any]:
         """
-        Generates a "fast fingerprint" of a single page using lightweight, 
+        Generates a "fast fingerprint" of a single page using lightweight,
         non-LLM methods.
 
         Args:
@@ -156,12 +161,12 @@ class DocumentSegmenter:
 
         # Calculate weighted average
         total_score = sum(scores[key] * self.SIMILARITY_WEIGHTS[key] for key in scores)
-        
+
         return total_score
 
     def _is_boundary_with_llm(self, page_image1: Any, page_image2: Any) -> bool:
         """
-        Uses a multimodal LLM to determine if there is a document boundary 
+        Uses a multimodal LLM to determine if there is a document boundary
         between two pages.
 
         Args:

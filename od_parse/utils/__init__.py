@@ -11,7 +11,7 @@ from od_parse.utils.text_cleaner import (
     calculate_alpha_ratio,
     is_garbage_text,
     clean_cid_codes,
-    clean_ocr_artifacts
+    clean_ocr_artifacts,
 )
 from od_parse.utils.text_normalizer import (
     normalize_ocr_spacing,
@@ -20,7 +20,7 @@ from od_parse.utils.text_normalizer import (
     normalize_class_of_admission,
     normalize_country_name,
     normalize_name,
-    normalize_i94_fields
+    normalize_i94_fields,
 )
 
 __all__ = [

@@ -9,12 +9,12 @@ from od_parse.async_processing.async_parser import (
     AsyncDocumentProcessor,
     ProgressTracker,
     process_files_async,
-    process_large_file_async
+    process_large_file_async,
 )
 
 __all__ = [
     "AsyncDocumentProcessor",
-    "ProgressTracker", 
+    "ProgressTracker",
     "process_files_async",
-    "process_large_file_async"
+    "process_large_file_async",
 ]

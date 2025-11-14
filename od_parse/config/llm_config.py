@@ -18,6 +18,7 @@ logger = get_logger(__name__)
 
 class LLMProvider(Enum):
     """Supported LLM providers for document parsing."""
+
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     GOOGLE = "google"
@@ -30,15 +31,17 @@ class LLMProvider(Enum):
 
 class DocumentComplexity(Enum):
     """Document complexity levels for LLM processing."""
-    SIMPLE = "simple"      # Basic text extraction
+
+    SIMPLE = "simple"  # Basic text extraction
     MODERATE = "moderate"  # Tables and forms
-    COMPLEX = "complex"    # Multi-column, handwriting, complex layouts
-    EXPERT = "expert"      # Scientific papers, legal documents, technical drawings
+    COMPLEX = "complex"  # Multi-column, handwriting, complex layouts
+    EXPERT = "expert"  # Scientific papers, legal documents, technical drawings
 
 
 @dataclass
 class LLMModelConfig:
     """Configuration for specific LLM models."""
+
     provider: LLMProvider
     model_name: str
     api_key_env: str
@@ -53,11 +56,11 @@ class LLMModelConfig:
 class LLMConfig:
     """
     LLM-First configuration manager for od-parse.
-    
+
     This class manages LLM providers, models, and parsing strategies
     for complex document understanding.
     """
-    
+
     def __init__(self):
         """Initialize LLM-first configuration."""
         self.logger = get_logger(__name__)
@@ -66,7 +69,7 @@ class LLMConfig:
         self.fallback_providers = []
         self.parsing_strategies = self._initialize_strategies()
         self._validate_api_keys()
-    
+
     def _initialize_models(self) -> Dict[str, LLMModelConfig]:
         """Initialize supported LLM models with their configurations."""
         return {
@@ -80,9 +83,11 @@ class LLMConfig:
                 supports_vision=True,
                 cost_per_1k_tokens=0.03,
                 context_window=128000,
-                recommended_complexity=[DocumentComplexity.COMPLEX, DocumentComplexity.EXPERT]
+                recommended_complexity=[
+                    DocumentComplexity.COMPLEX,
+                    DocumentComplexity.EXPERT,
+                ],
             ),
-            
             "gpt-4o-mini": LLMModelConfig(
                 provider=LLMProvider.OPENAI,
                 model_name="gpt-4o-mini",
@@ -92,9 +97,11 @@ class LLMConfig:
                 supports_vision=True,
                 cost_per_1k_tokens=0.0015,
                 context_window=128000,
-                recommended_complexity=[DocumentComplexity.SIMPLE, DocumentComplexity.MODERATE]
+                recommended_complexity=[
+                    DocumentComplexity.SIMPLE,
+                    DocumentComplexity.MODERATE,
+                ],
             ),
-            
             "gpt-4-turbo": LLMModelConfig(
                 provider=LLMProvider.OPENAI,
                 model_name="gpt-4-turbo",
@@ -104,9 +111,11 @@ class LLMConfig:
                 supports_vision=True,
                 cost_per_1k_tokens=0.01,
                 context_window=128000,
-                recommended_complexity=[DocumentComplexity.COMPLEX, DocumentComplexity.EXPERT]
+                recommended_complexity=[
+                    DocumentComplexity.COMPLEX,
+                    DocumentComplexity.EXPERT,
+                ],
             ),
-            
             # Anthropic Models
             "claude-3-5-sonnet": LLMModelConfig(
                 provider=LLMProvider.ANTHROPIC,
@@ -117,9 +126,11 @@ class LLMConfig:
                 supports_vision=True,
                 cost_per_1k_tokens=0.003,
                 context_window=200000,
-                recommended_complexity=[DocumentComplexity.COMPLEX, DocumentComplexity.EXPERT]
+                recommended_complexity=[
+                    DocumentComplexity.COMPLEX,
+                    DocumentComplexity.EXPERT,
+                ],
             ),
-            
             "claude-3-haiku": LLMModelConfig(
                 provider=LLMProvider.ANTHROPIC,
                 model_name="claude-3-haiku-20240307",
@@ -129,9 +140,11 @@ class LLMConfig:
                 supports_vision=True,
                 cost_per_1k_tokens=0.00025,
                 context_window=200000,
-                recommended_complexity=[DocumentComplexity.SIMPLE, DocumentComplexity.MODERATE]
+                recommended_complexity=[
+                    DocumentComplexity.SIMPLE,
+                    DocumentComplexity.MODERATE,
+                ],
             ),
-            
             # Google Models
             "gemini-1.5-pro": LLMModelConfig(
                 provider=LLMProvider.GOOGLE,
@@ -142,9 +155,11 @@ class LLMConfig:
                 supports_vision=True,
                 cost_per_1k_tokens=0.0035,
                 context_window=1000000,
-                recommended_complexity=[DocumentComplexity.COMPLEX, DocumentComplexity.EXPERT]
+                recommended_complexity=[
+                    DocumentComplexity.COMPLEX,
+                    DocumentComplexity.EXPERT,
+                ],
             ),
-            
             "gemini-1.5-flash": LLMModelConfig(
                 provider=LLMProvider.GOOGLE,
                 model_name="gemini-1.5-flash",
@@ -154,9 +169,11 @@ class LLMConfig:
                 supports_vision=True,
                 cost_per_1k_tokens=0.00015,
                 context_window=1000000,
-                recommended_complexity=[DocumentComplexity.SIMPLE, DocumentComplexity.MODERATE]
+                recommended_complexity=[
+                    DocumentComplexity.SIMPLE,
+                    DocumentComplexity.MODERATE,
+                ],
             ),
-            
             # Azure OpenAI
             "azure-gpt-4o": LLMModelConfig(
                 provider=LLMProvider.AZURE_OPENAI,
@@ -167,9 +184,11 @@ class LLMConfig:
                 supports_vision=True,
                 cost_per_1k_tokens=0.03,
                 context_window=128000,
-                recommended_complexity=[DocumentComplexity.COMPLEX, DocumentComplexity.EXPERT]
+                recommended_complexity=[
+                    DocumentComplexity.COMPLEX,
+                    DocumentComplexity.EXPERT,
+                ],
             ),
-            
             # Local/Ollama Models
             "llama-3.2-vision": LLMModelConfig(
                 provider=LLMProvider.OLLAMA,
@@ -180,10 +199,13 @@ class LLMConfig:
                 supports_vision=True,
                 cost_per_1k_tokens=0.0,  # Free local model
                 context_window=8192,
-                recommended_complexity=[DocumentComplexity.SIMPLE, DocumentComplexity.MODERATE]
-            )
+                recommended_complexity=[
+                    DocumentComplexity.SIMPLE,
+                    DocumentComplexity.MODERATE,
+                ],
+            ),
         }
-    
+
     def _initialize_strategies(self) -> Dict[str, Dict[str, Any]]:
         """Initialize parsing strategies for different document types."""
         return {
@@ -197,9 +219,8 @@ class LLMConfig:
 - Form-specific fields and line items
 Provide structured JSON output with high accuracy.""",
                 "complexity": DocumentComplexity.COMPLEX,
-                "requires_vision": True
+                "requires_vision": True,
             },
-            
             "financial_statements": {
                 "preferred_models": ["gpt-4o", "claude-3-5-sonnet", "gemini-1.5-pro"],
                 "system_prompt": """You are a financial document expert. Extract and structure:
@@ -210,9 +231,8 @@ Provide structured JSON output with high accuracy.""",
 - Investment holdings and performance
 Ensure numerical accuracy and proper formatting.""",
                 "complexity": DocumentComplexity.COMPLEX,
-                "requires_vision": True
+                "requires_vision": True,
             },
-            
             "legal_contracts": {
                 "preferred_models": ["gpt-4o", "claude-3-5-sonnet"],
                 "system_prompt": """You are a legal document specialist. Extract and organize:
@@ -224,9 +244,8 @@ Ensure numerical accuracy and proper formatting.""",
 - Signature blocks and execution details
 Maintain legal accuracy and completeness.""",
                 "complexity": DocumentComplexity.EXPERT,
-                "requires_vision": True
+                "requires_vision": True,
             },
-            
             "medical_records": {
                 "preferred_models": ["gpt-4o", "claude-3-5-sonnet"],
                 "system_prompt": """You are a medical document expert. Extract and structure:
@@ -238,11 +257,14 @@ Maintain legal accuracy and completeness.""",
 - Insurance and billing information
 Ensure medical accuracy and HIPAA compliance considerations.""",
                 "complexity": DocumentComplexity.EXPERT,
-                "requires_vision": True
+                "requires_vision": True,
             },
-            
             "invoices_receipts": {
-                "preferred_models": ["gpt-4o-mini", "claude-3-haiku", "gemini-1.5-flash"],
+                "preferred_models": [
+                    "gpt-4o-mini",
+                    "claude-3-haiku",
+                    "gemini-1.5-flash",
+                ],
                 "system_prompt": """You are a business document processor. Extract:
 - Vendor/customer information
 - Invoice/receipt numbers and dates
@@ -251,9 +273,8 @@ Ensure medical accuracy and HIPAA compliance considerations.""",
 - Payment terms and methods
 Ensure accurate numerical extraction.""",
                 "complexity": DocumentComplexity.MODERATE,
-                "requires_vision": True
+                "requires_vision": True,
             },
-            
             "research_papers": {
                 "preferred_models": ["gpt-4o", "claude-3-5-sonnet", "gemini-1.5-pro"],
                 "system_prompt": """You are an academic document analyst. Extract and structure:
@@ -265,11 +286,14 @@ Ensure accurate numerical extraction.""",
 - Mathematical formulas and equations
 Maintain academic rigor and citation accuracy.""",
                 "complexity": DocumentComplexity.EXPERT,
-                "requires_vision": True
+                "requires_vision": True,
             },
-            
             "general_documents": {
-                "preferred_models": ["gpt-4o-mini", "claude-3-haiku", "gemini-1.5-flash"],
+                "preferred_models": [
+                    "gpt-4o-mini",
+                    "claude-3-haiku",
+                    "gemini-1.5-flash",
+                ],
                 "system_prompt": """You are a general document processor. Extract and organize:
 - Document structure and headings
 - Key information and data points
@@ -278,61 +302,72 @@ Maintain academic rigor and citation accuracy.""",
 - Contact information
 Provide clear, structured output.""",
                 "complexity": DocumentComplexity.SIMPLE,
-                "requires_vision": False
-            }
+                "requires_vision": False,
+            },
         }
-    
+
     def _validate_api_keys(self) -> None:
         """Validate available API keys and set default provider."""
         available_providers = []
-        
+
         for model_id, config in self.models.items():
             if config.api_key_env and os.getenv(config.api_key_env):
                 available_providers.append((config.provider, model_id))
                 if not self.default_provider:
                     self.default_provider = model_id
                     self.logger.info(f"Set default LLM provider: {model_id}")
-        
+
         if not available_providers:
-            self.logger.warning("No LLM API keys found. od-parse requires LLM access for advanced document parsing.")
+            self.logger.warning(
+                "No LLM API keys found. od-parse requires LLM access for advanced document parsing."
+            )
             self.logger.info("Please set one of the following environment variables:")
             for model_id, config in self.models.items():
                 if config.api_key_env:
                     self.logger.info(f"  {config.api_key_env} for {model_id}")
         else:
-            self.logger.info(f"Found {len(available_providers)} available LLM providers")
-    
-    def get_recommended_model(self, document_type: str = "general_documents", 
-                            complexity: DocumentComplexity = DocumentComplexity.MODERATE) -> Optional[str]:
+            self.logger.info(
+                f"Found {len(available_providers)} available LLM providers"
+            )
+
+    def get_recommended_model(
+        self,
+        document_type: str = "general_documents",
+        complexity: DocumentComplexity = DocumentComplexity.MODERATE,
+    ) -> Optional[str]:
         """Get recommended model for document type and complexity."""
-        strategy = self.parsing_strategies.get(document_type, self.parsing_strategies["general_documents"])
-        
+        strategy = self.parsing_strategies.get(
+            document_type, self.parsing_strategies["general_documents"]
+        )
+
         # Find first available model from preferred list
         for model_id in strategy["preferred_models"]:
             if model_id in self.models:
                 config = self.models[model_id]
                 if config.api_key_env and os.getenv(config.api_key_env):
                     return model_id
-        
+
         # Fallback to default provider
         return self.default_provider
-    
+
     def has_api_key(self, provider: LLMProvider) -> bool:
         """Check if API key is available for provider."""
         for config in self.models.values():
             if config.provider == provider and config.api_key_env:
                 return bool(os.getenv(config.api_key_env))
         return False
-    
+
     def get_system_prompt(self, document_type: str) -> str:
         """Get system prompt for document type."""
-        strategy = self.parsing_strategies.get(document_type, self.parsing_strategies["general_documents"])
+        strategy = self.parsing_strategies.get(
+            document_type, self.parsing_strategies["general_documents"]
+        )
         return strategy["system_prompt"]
-    
+
     def requires_llm_key(self) -> bool:
         """Check if LLM key is required (always True for LLM-first approach)."""
         return True
-    
+
     def get_available_models(self) -> List[str]:
         """Get list of available models with valid API keys."""
         available = []
@@ -344,6 +379,7 @@ Provide clear, structured output.""",
 
 # Global configuration instance
 _llm_config = None
+
 
 def get_llm_config() -> LLMConfig:
     """Get global LLM configuration instance."""
