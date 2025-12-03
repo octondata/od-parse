@@ -19,7 +19,7 @@ from pdfminer.pdfpage import PDFPage
 
 from od_parse.utils.file_utils import validate_file
 from od_parse.utils.logging_utils import get_logger
-from od_parse.utils.text_normalizer import normalize_ocr_spacing, clean_text_for_json
+from od_parse.utils.text_normalizer import clean_text_for_json, normalize_ocr_spacing
 
 logger = get_logger(__name__)
 
@@ -89,9 +89,7 @@ def calculate_alpha_ratio(text: str) -> float:
 
 
 def validate_and_log_text_quality(
-    text: str,
-    source: str,
-    min_length: int = MIN_TEXT_LENGTH
+    text: str, source: str, min_length: int = MIN_TEXT_LENGTH
 ) -> tuple[bool, float, bool]:
     """
     Validate text quality and log results.
@@ -184,9 +182,9 @@ def is_readable_text(text: str) -> bool:
     garbage_ratio = garbage_count / text_len
 
     return (
-        alpha_ratio >= MIN_ALPHA_RATIO and
-        garbage_ratio <= MAX_GARBAGE_RATIO and
-        valid_word_count >= MIN_VALID_WORDS
+        alpha_ratio >= MIN_ALPHA_RATIO
+        and garbage_ratio <= MAX_GARBAGE_RATIO
+        and valid_word_count >= MIN_VALID_WORDS
     )
 
 
@@ -195,7 +193,7 @@ def parse_pdf(
     use_ocr: bool = True,
     clean_text: bool = True,
     preserve_structure: bool = False,
-    **kwargs
+    **kwargs,
 ) -> Dict[str, Any]:
     """
     Parse a PDF file and extract its content.
@@ -232,7 +230,9 @@ def parse_pdf(
     # Clean text if requested
     if clean_text and text:
         text = clean_text_for_json(text, preserve_structure=preserve_structure)
-        logger.info(f"✨ Text cleaned for JSON output (preserve_structure={preserve_structure})")
+        logger.info(
+            f"✨ Text cleaned for JSON output (preserve_structure={preserve_structure})"
+        )
 
     images = _run_extraction_step("Images", extract_images, file_path)
     tables = _run_extraction_step("Tables", extract_tables, file_path)
@@ -474,8 +474,10 @@ def extract_text_with_pymupdf(file_path: Union[str, Path]) -> str:
             cid_count = cleaned_text.count("(cid:")
 
             # Normalize only if text quality is reasonable
-            if (alpha_ratio > MIN_ALPHA_RATIO_FOR_NORMALIZATION and
-                cid_count < MAX_CID_COUNT_FOR_NORMALIZATION):
+            if (
+                alpha_ratio > MIN_ALPHA_RATIO_FOR_NORMALIZATION
+                and cid_count < MAX_CID_COUNT_FOR_NORMALIZATION
+            ):
                 cleaned_text = normalize_ocr_spacing(cleaned_text)
                 logger.debug(
                     f"PyMuPDF text normalized and cleaned ({len(cleaned_text)} chars, alpha_ratio={alpha_ratio:.2f})"
@@ -539,7 +541,7 @@ def extract_text_with_ocr(file_path: Union[str, Path]) -> str:
                 # Calculate scale factor
                 scale_factor = max(
                     MIN_UPSCALE_FACTOR,
-                    min(MAX_UPSCALE_FACTOR, TARGET_RESOLUTION / max(width, height))
+                    min(MAX_UPSCALE_FACTOR, TARGET_RESOLUTION / max(width, height)),
                 )
                 new_width = int(width * scale_factor)
                 new_height = int(height * scale_factor)
@@ -557,8 +559,7 @@ def extract_text_with_ocr(file_path: Union[str, Path]) -> str:
             # Contrast Limited Adaptive Histogram Equalization
             # This improves contrast locally, especially good for low-quality scans
             clahe = cv2.createCLAHE(
-                clipLimit=CLAHE_CLIP_LIMIT,
-                tileGridSize=CLAHE_TILE_SIZE
+                clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILE_SIZE
             )
             gray = clahe.apply(gray)
             logger.debug("✨ Applied CLAHE contrast enhancement")
@@ -638,8 +639,10 @@ def extract_text_with_ocr(file_path: Union[str, Path]) -> str:
             page_text = pytesseract.image_to_string(processed_img, config=custom_config)
 
             # If OCR returns very little text or garbage, try alternative PSM modes
-            if (len(page_text.strip()) < MIN_TEXT_LENGTH or
-                calculate_alpha_ratio(page_text) < MIN_ALPHA_RATIO_FOR_NORMALIZATION):
+            if (
+                len(page_text.strip()) < MIN_TEXT_LENGTH
+                or calculate_alpha_ratio(page_text) < MIN_ALPHA_RATIO_FOR_NORMALIZATION
+            ):
                 logger.warning(
                     f"⚠️  Low-quality OCR result on page {i+1}, trying alternative PSM mode..."
                 )
@@ -899,7 +902,9 @@ def extract_forms(file_path: Union[str, Path]) -> List[Dict[str, Any]]:
                     if isinstance(element, LTTextContainer):
                         raw_text = element.get_text().strip()
                         # Clean the text for better JSON output
-                        cleaned_text = clean_text_for_json(raw_text, preserve_structure=True)
+                        cleaned_text = clean_text_for_json(
+                            raw_text, preserve_structure=True
+                        )
                         text_lower = cleaned_text.lower()
 
                         if any(
