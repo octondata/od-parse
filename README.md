@@ -33,44 +33,37 @@ An enterprise-grade, LLM-powered library for parsing complex PDFs using state-of
 
 ## Installation
 
-> **🤖 LLM Required:** od-parse now requires LLM API keys for document processing. Set up your API keys before installation.
-
-> **📦 Installation:** od-parse is distributed via GitHub. Install with `pip install git+https://github.com/octondata/od-parse.git` or download wheel files from [GitHub Releases](https://github.com/octondata/od-parse/releases).
-
 ### Step 1: Set Up LLM API Keys
 
-Choose one or more LLM providers and set up your API keys:
+od-parse uses LLM APIs for advanced document understanding. Set up at least one provider:
 
 ```bash
-# OpenAI (Recommended for best performance)
+# Google Gemini (Recommended - great balance of cost/performance)
+export GOOGLE_API_KEY="your-google-api-key"
+
+# OpenAI (Best accuracy)
 export OPENAI_API_KEY="your-openai-api-key"
 
 # Anthropic Claude (Excellent for complex documents)
 export ANTHROPIC_API_KEY="your-anthropic-api-key"
-
-# Google Gemini (Great for large documents)
-export GOOGLE_API_KEY="your-google-api-key"
-
-# Azure OpenAI (Enterprise option)
-export AZURE_OPENAI_API_KEY="your-azure-key"
-export AZURE_OPENAI_ENDPOINT="your-azure-endpoint"
 ```
 
-### Step 2: Installation
+### Step 2: Install the Package
 
 **Option 1: Install from GitHub (Recommended)** ⭐
 ```bash
 pip install git+https://github.com/octondata/od-parse.git
 ```
 
-**Option 2: Install from Wheel File (From GitHub Releases)**
+**Option 2: Install from Wheel File**
 ```bash
-# Download wheel from: https://github.com/octondata/od-parse/releases
+# Download the latest wheel from GitHub Releases
+# https://github.com/octondata/od-parse/releases
+
 pip install od_parse-0.2.0-py3-none-any.whl
 ```
 
 **Option 3: Install from Source (For Development)**
-
 ```bash
 # Clone the repository
 git clone https://github.com/octondata/od-parse.git
@@ -83,71 +76,21 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install in development mode
 pip install -e .
 
-# Or install with advanced features
-pip install -e .[advanced]
+# Install with Excel processing support
+pip install -e .[excel]
+
+# Install with all features
 pip install -e .[all]
 ```
 
-> **💡 Note:** See [docs/INSTALLATION_METHODS.md](docs/INSTALLATION_METHODS.md) for all installation methods and best practices.
-
-### Quick Setup Script
-
-For convenience, you can use the automated setup script:
+### Optional Dependencies
 
 ```bash
-# Clone and run setup script
-git clone https://github.com/octondata/od-parse.git
-cd od-parse
-chmod +x setup_dev.sh
-./setup_dev.sh
-```
+# Excel processing (DuckDB)
+pip install od-parse[excel]
 
-This script will:
-- ✅ Create a virtual environment
-- ✅ Install all dependencies
-- ✅ Install od-parse in development mode
-- ✅ Test the installation
-- ✅ Provide next steps
-
-### Alternative: Direct Download
-
-If you don't have git, you can download and install directly:
-
-```bash
-# Download the source code
-wget https://github.com/octondata/od-parse/archive/main.zip
-unzip main.zip
-cd od-parse-main
-
-# Create virtual environment and install
-python3 -m venv venv
-source venv/bin/activate
-pip install -e .
-```
-
-### Future PyPI Installation (Coming Soon)
-
-Once published to PyPI, you'll be able to install with:
-
-```bash
-# Install the basic package (COMING SOON)
-pip install od-parse
-
-# Install with all advanced features (COMING SOON)
-pip install "od-parse[all]"
-
-# Install with specific advanced features (COMING SOON)
-pip install "od-parse[trocr]"              # TrOCR text recognition
-pip install "od-parse[table_transformer]"  # Neural table extraction
-pip install "od-parse[llava_next]"         # Document understanding with VLMs
-pip install "od-parse[multilingual]"       # Multi-language support
-pip install "od-parse[quality_assessment]" # Quality assessment metrics
-pip install "od-parse[async_processing]"   # Async processing capabilities
-
-# Install preset combinations (COMING SOON)
-pip install "od-parse[basic]"        # Essential features
-pip install "od-parse[advanced]"     # All stable features
-pip install "od-parse[experimental]" # All features including experimental
+# Advanced AI features (requires PyTorch ~2GB)
+pip install od-parse[advanced]
 ```
 
 ### Installation Troubleshooting
@@ -167,7 +110,11 @@ export GOOGLE_API_KEY="your-key-here"
 
 **❌ Error: "Could not find a version that satisfies the requirement od-parse"**
 
-This error occurs because `od-parse` is not yet published to PyPI. Use the development installation method above.
+od-parse is not published to PyPI. Install from GitHub instead:
+
+```bash
+pip install git+https://github.com/octondata/od-parse.git
+```
 
 **❌ Error: "externally-managed-environment"**
 
