@@ -65,17 +65,23 @@ class TestMultilingualProcessor(unittest.TestCase):
     def test_language_detection_with_langdetect(self):
         """Test language detection with langdetect if available."""
         try:
-            import langdetect
-            
-            result = self.processor.detect_language(self.sample_texts["en"], method="langdetect")
-            
+            import langdetect  # noqa: F401
+
+            # Enable multilingual feature and create new processor
+            self.config.enable_feature("multilingual", check_dependencies=False)
+            processor = MultilingualProcessor()
+
+            result = processor.detect_language(
+                self.sample_texts["en"], method="langdetect"
+            )
+
             self.assertIn("language", result)
             self.assertIn("confidence", result)
             self.assertEqual(result["method"], "langdetect")
-            
+
             # Should detect English
             self.assertEqual(result["language"], "en")
-            
+
         except ImportError:
             self.skipTest("langdetect not available")
     
@@ -155,15 +161,19 @@ class TestMultilingualProcessor(unittest.TestCase):
     def test_translation_with_googletrans(self):
         """Test translation with Google Translate if available."""
         try:
-            import googletrans
-            
+            import googletrans  # noqa: F401
+
+            # Enable multilingual feature and create new processor
+            self.config.enable_feature("multilingual", check_dependencies=False)
+            processor = MultilingualProcessor()
+
             text = "Hello world"
-            result = self.processor._translate_with_googletrans(text, "en", "es")
-            
+            result = processor._translate_with_googletrans(text, "en", "es")
+
             self.assertIn("translated_text", result)
             self.assertEqual(result["method"], "googletrans")
             self.assertNotEqual(result["translated_text"], text)  # Should be translated
-            
+
         except ImportError:
             self.skipTest("googletrans not available")
     

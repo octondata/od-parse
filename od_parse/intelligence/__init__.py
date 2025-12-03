@@ -1,13 +1,14 @@
 """
-Document Intelligence Module
+Document Intelligence Module.
 
 Smart document classification and analysis for PDF parsing.
 """
+from __future__ import annotations
 
 from od_parse.intelligence.document_classifier import (
-    DocumentType,
-    DocumentClassifier,
     DocumentAnalysis,
+    DocumentClassifier,
+    DocumentType,
 )
 
 __all__ = ["DocumentType", "DocumentClassifier", "DocumentAnalysis"]

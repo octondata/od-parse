@@ -19,9 +19,12 @@ class TestOCRModule(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        self.samples_dir = Path(__file__).parent / "sample_pdfs"
-        
-        # Create sample_pdfs directory if it doesn't exist
+        # Check both sample directories
+        self.samples_dir = Path(__file__).parent / "samples"
+        if not self.samples_dir.exists():
+            self.samples_dir = Path(__file__).parent / "sample_pdfs"
+
+        # Create directory if it doesn't exist
         if not self.samples_dir.exists():
             self.samples_dir.mkdir(parents=True)
     
@@ -67,7 +70,13 @@ class TestOCRModule(unittest.TestCase):
     def test_extract_handwritten_content_with_sample_image(self):
         """Test extracting handwritten content from a sample image."""
         # This test will be skipped if no sample image is available
-        sample_image = next((f for f in self.samples_dir.glob("*.png")), None)
+        # Look for common image formats
+        sample_image = None
+        for ext in ["*.png", "*.jpg", "*.jpeg"]:
+            sample_image = next((f for f in self.samples_dir.glob(ext)), None)
+            if sample_image:
+                break
+
         if sample_image is None:
             self.skipTest("No sample image available for testing")
         

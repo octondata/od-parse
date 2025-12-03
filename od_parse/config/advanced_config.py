@@ -1,17 +1,18 @@
 """
-Advanced Configuration System for od-parse
+Advanced Configuration System for od-parse.
 
-This module provides a flexible configuration system that allows users to 
+This module provides a flexible configuration system that allows users to
 enable/disable advanced features with optional dependencies.
 """
+from __future__ import annotations
 
-import os
 import json
+import os
 import warnings
-from typing import Dict, Any, Optional, List
-from pathlib import Path
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from od_parse.utils.logging_utils import get_logger
 

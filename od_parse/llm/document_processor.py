@@ -1,20 +1,22 @@
 """
-LLM-Powered Document Processor
+LLM-Powered Document Processor.
 
 Advanced document parsing using state-of-the-art language models
 for complex PDF understanding and structured data extraction.
 """
+from __future__ import annotations
 
-import os
-import json
 import base64
-from typing import Dict, Any, Optional, List, Union
-from pathlib import Path
-from PIL import Image
 import io
+import json
+import os
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
-from od_parse.config.llm_config import get_llm_config, LLMProvider, DocumentComplexity
-from od_parse.intelligence import DocumentType, DocumentClassifier
+from PIL import Image
+
+from od_parse.config.llm_config import DocumentComplexity, LLMProvider, get_llm_config
+from od_parse.intelligence import DocumentClassifier, DocumentType
 from od_parse.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)

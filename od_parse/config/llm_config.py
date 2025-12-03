@@ -1,15 +1,16 @@
 """
-LLM-First Configuration System for od-parse
+LLM-First Configuration System for od-parse.
 
 This module provides LLM-centric configuration for advanced document parsing
 using state-of-the-art language models for complex PDF understanding.
 """
+from __future__ import annotations
 
-import os
 import json
-from typing import Dict, Any, Optional, List
+import os
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 from od_parse.utils.logging_utils import get_logger
 

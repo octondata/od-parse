@@ -1,15 +1,14 @@
-"""
-Module for extracting handwritten content from images using OCR.
-"""
+"""Module for extracting handwritten content from images using OCR."""
+from __future__ import annotations
 
 import os
-from typing import Union, Optional, Dict, Any
 from pathlib import Path
+from typing import Any, Dict, Optional, Union
 
-import pytesseract
-from PIL import Image
 import cv2
 import numpy as np
+import pytesseract
+from PIL import Image
 
 from od_parse.utils.logging_utils import get_logger
 

@@ -1,15 +1,16 @@
 """
-Document Quality Assessment Module
+Document Quality Assessment Module.
 
 This module provides comprehensive quality assessment metrics for document
 extraction results, helping users understand the reliability and accuracy
 of the parsed content.
 """
+from __future__ import annotations
 
-import re
 import math
-from typing import Dict, Any, List, Optional, Union, Tuple
+import re
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 from PIL import Image

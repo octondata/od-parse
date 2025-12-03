@@ -7,17 +7,18 @@ This agent:
 - Predicts cache hits
 - Optimizes cache storage
 """
+from __future__ import annotations
 
-import os
-import time
-import json
 import hashlib
-import pickle
-from pathlib import Path
-from typing import Dict, Any, Optional, List
-from dataclasses import dataclass, asdict
-from collections import defaultdict
+import json
 import logging
+import os
+import pickle
+import time
+from collections import defaultdict
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from od_parse.utils.logging_utils import get_logger
 

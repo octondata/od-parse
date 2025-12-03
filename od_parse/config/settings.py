@@ -4,21 +4,23 @@ Configuration settings for od-parse library.
 This module provides functions for loading and accessing configuration settings
 from various sources (environment variables, config files, etc.).
 """
+from __future__ import annotations
 
-import os
 import json
+import os
 from pathlib import Path
-from typing import Dict, Any, Optional
-
-# Optional import for YAML support
-try:
-    import yaml
-
-    YAML_AVAILABLE = True
-except ImportError:
-    YAML_AVAILABLE = False
+from typing import Any, Dict, Optional
 
 from od_parse.utils.logging_utils import get_logger
+
+# Optional: YAML support
+YAML_AVAILABLE: bool = False
+
+try:
+    import yaml
+    YAML_AVAILABLE = True
+except ImportError:
+    pass
 
 logger = get_logger(__name__)
 

@@ -1,14 +1,15 @@
 """
-Multi-Language Processing Module
+Multi-Language Processing Module.
 
 This module provides comprehensive multilingual support for document processing,
 including language detection, text processing, and translation capabilities.
 """
+from __future__ import annotations
 
 import os
 import re
-from typing import Dict, Any, List, Optional, Union, Tuple
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from od_parse.config import get_advanced_config
 from od_parse.utils.logging_utils import get_logger

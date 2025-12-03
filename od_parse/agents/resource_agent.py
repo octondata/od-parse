@@ -7,13 +7,15 @@ This agent:
 - Prevents memory overflow
 - Optimizes resource allocation
 """
+from __future__ import annotations
 
+import logging
 import os
 import time
-import psutil
-from typing import Dict, Any, Optional
 from dataclasses import dataclass
-import logging
+from typing import Any, Dict, Optional
+
+import psutil
 
 from od_parse.utils.logging_utils import get_logger
 

@@ -1,11 +1,10 @@
-"""
-Module for converting parsed PDF content to Markdown format.
-"""
+"""Module for converting parsed PDF content to Markdown format."""
+from __future__ import annotations
 
-import os
 import json
-from typing import Dict, List, Any, Optional, Union
+import os
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
 from od_parse.utils.logging_utils import get_logger
 

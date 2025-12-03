@@ -7,15 +7,16 @@ This agent analyzes documents and decides:
 - What quality settings to apply
 - Which extraction methods to prioritize
 """
+from __future__ import annotations
 
+import hashlib
+import logging
 import os
 import time
-import hashlib
-from pathlib import Path
-from typing import Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass
 from enum import Enum
-import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 from od_parse.utils.logging_utils import get_logger
 

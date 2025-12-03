@@ -4,6 +4,7 @@ OctonData Parse - Main Interface Module
 This module provides an easy-to-use interface to the PDF parsing capabilities
 of the od-parse library, allowing users to extract rich content from documents.
 """
+from __future__ import annotations
 
 import argparse
 import json
@@ -17,17 +18,18 @@ import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+import numpy as np
+import pdf2image
+import pdfplumber
+import PyPDF2
+
+from od_parse.chunking.document_segmenter import DocumentSegmenter
 from od_parse.config import get_advanced_config
 from od_parse.config.llm_config import get_llm_config
 from od_parse.converter import convert_to_markdown
 from od_parse.parser import core_parse_pdf
 from od_parse.quality import assess_document_quality
 from od_parse.utils.logging_utils import configure_logging, get_logger
-from od_parse.chunking.document_segmenter import DocumentSegmenter
-import PyPDF2
-import pdfplumber
-import pdf2image
-import numpy as np
 
 
 def parse_pdf(

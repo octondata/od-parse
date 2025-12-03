@@ -18,9 +18,12 @@ class TestPDFParser(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        self.samples_dir = Path(__file__).parent / "sample_pdfs"
-        
-        # Create sample_pdfs directory if it doesn't exist
+        # Check both sample directories - prefer 'samples' over 'sample_pdfs'
+        self.samples_dir = Path(__file__).parent / "samples"
+        if not self.samples_dir.exists():
+            self.samples_dir = Path(__file__).parent / "sample_pdfs"
+
+        # Create directory if it doesn't exist
         if not self.samples_dir.exists():
             self.samples_dir.mkdir(parents=True)
     

@@ -1,23 +1,22 @@
-"""
-Core PDF parsing functionality.
-"""
+"""Core PDF parsing functionality."""
+from __future__ import annotations
 
-import os
 import logging
-from typing import Dict, List, Any, Optional, Union
-from pathlib import Path
-
-import pdfminer
-from pdfminer.high_level import extract_text as pdfminer_extract_text
-from pdfminer.layout import LAParams, LTTextContainer, LTImage, LTFigure
-from pdfminer.converter import PDFPageAggregator
-from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
-from pdfminer.pdfpage import PDFPage
-import pdf2image
-import cv2
-import numpy as np
+import os
 import re
 import time
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+
+import cv2
+import numpy as np
+import pdf2image
+import pdfminer
+from pdfminer.converter import PDFPageAggregator
+from pdfminer.high_level import extract_text as pdfminer_extract_text
+from pdfminer.layout import LAParams, LTFigure, LTImage, LTTextContainer
+from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
+from pdfminer.pdfpage import PDFPage
 
 from od_parse.ocr import extract_handwritten_content
 from od_parse.utils.file_utils import validate_file
@@ -26,15 +25,16 @@ from od_parse.utils.text_normalizer import normalize_ocr_spacing
 
 logger = get_logger(__name__)
 
-# Try to import pdfplumber for table extraction (pure Python, no Java needed)
+# Optional: pdfplumber for table extraction (pure Python, no Java needed)
+PDFPLUMBER_AVAILABLE: bool = False
+
 try:
     import pdfplumber
-
     PDFPLUMBER_AVAILABLE = True
 except ImportError:
-    PDFPLUMBER_AVAILABLE = False
     logger.warning(
-        "pdfplumber not available. Table extraction will be limited. Install with: pip install pdfplumber"
+        "pdfplumber not available. Table extraction will be limited. "
+        "Install with: pip install pdfplumber"
     )
 
 

@@ -4,6 +4,7 @@ Async processing module for od-parse.
 This module provides asynchronous processing capabilities for document
 parsing operations, including batch processing and progress tracking.
 """
+from __future__ import annotations
 
 from od_parse.async_processing.async_parser import (
     AsyncDocumentProcessor,
