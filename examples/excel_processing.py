@@ -229,7 +229,8 @@ def example_sql_query():
             # Query: Get high-value sales (Total > 1100)
             print("\n1. High-value sales (Total > 1100):")
             result = processor.query(
-                sample_file, "SELECT Product, Quantity, Total FROM Sales WHERE Total > 1100"
+                sample_file,
+                "SELECT Product, Quantity, Total FROM Sales WHERE Total > 1100",
             )
             for row in result:
                 print(f"   {row}")

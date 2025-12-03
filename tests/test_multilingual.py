@@ -11,16 +11,25 @@ from pathlib import Path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from od_parse.config import get_advanced_config
-from od_parse.multilingual import (
-    MultilingualProcessor,
-    detect_document_language,
-    process_multilingual_document
-)
+
+# Handle potential import errors from googletrans/httpcore conflicts
+try:
+    from od_parse.multilingual import (
+        MultilingualProcessor,
+        detect_document_language,
+        process_multilingual_document,
+    )
+
+    MULTILINGUAL_AVAILABLE = True
+except (ImportError, AttributeError) as e:
+    MULTILINGUAL_AVAILABLE = False
+    MULTILINGUAL_ERROR = str(e)
 
 
+@unittest.skipUnless(MULTILINGUAL_AVAILABLE, "Multilingual module not available")
 class TestMultilingualProcessor(unittest.TestCase):
     """Test cases for Multilingual Processor."""
-    
+
     def setUp(self):
         """Set up test fixtures."""
         self.config = get_advanced_config()
@@ -174,8 +183,8 @@ class TestMultilingualProcessor(unittest.TestCase):
             self.assertEqual(result["method"], "googletrans")
             self.assertNotEqual(result["translated_text"], text)  # Should be translated
 
-        except ImportError:
-            self.skipTest("googletrans not available")
+        except (ImportError, AttributeError) as e:
+            self.skipTest(f"googletrans not available: {e}")
     
     def test_translation_empty_text(self):
         """Test translation with empty text."""
@@ -236,9 +245,10 @@ class TestMultilingualProcessor(unittest.TestCase):
                 self.assertEqual(result["language"], expected_lang)
 
 
+@unittest.skipUnless(MULTILINGUAL_AVAILABLE, "Multilingual module not available")
 class TestConvenienceFunctions(unittest.TestCase):
     """Test convenience functions."""
-    
+
     def test_detect_document_language_convenience(self):
         """Test detect_document_language convenience function."""
         text = "This is a sample English document."

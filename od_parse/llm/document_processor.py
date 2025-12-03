@@ -4,6 +4,7 @@ LLM-Powered Document Processor.
 Advanced document parsing using state-of-the-art language models
 for complex PDF understanding and structured data extraction.
 """
+
 from __future__ import annotations
 
 import base64

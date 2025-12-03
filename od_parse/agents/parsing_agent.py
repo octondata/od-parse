@@ -7,6 +7,7 @@ This agent analyzes documents and decides:
 - What quality settings to apply
 - Which extraction methods to prioritize
 """
+
 from __future__ import annotations
 
 import hashlib

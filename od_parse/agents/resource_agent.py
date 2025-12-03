@@ -7,6 +7,7 @@ This agent:
 - Prevents memory overflow
 - Optimizes resource allocation
 """
+
 from __future__ import annotations
 
 import logging

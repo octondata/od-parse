@@ -7,6 +7,7 @@ This agent:
 - Predicts cache hits
 - Optimizes cache storage
 """
+
 from __future__ import annotations
 
 import hashlib

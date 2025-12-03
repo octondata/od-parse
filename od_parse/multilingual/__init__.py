@@ -4,6 +4,7 @@ Multilingual processing module for od-parse.
 This module provides comprehensive multilingual support for document
 processing, including language detection, text processing, and translation.
 """
+
 from __future__ import annotations
 
 from od_parse.multilingual.language_processor import (

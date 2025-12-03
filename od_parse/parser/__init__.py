@@ -1,4 +1,5 @@
 """Parser module for extracting content from PDF files."""
+
 from __future__ import annotations
 
 from od_parse.parser.pdf_parser import (

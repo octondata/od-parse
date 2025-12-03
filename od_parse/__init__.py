@@ -9,6 +9,7 @@ Features:
 - Adaptive processing strategies
 - Resource-aware execution
 """
+
 from __future__ import annotations
 
 from typing import Any, Optional
@@ -26,6 +27,7 @@ try:
         excel_to_markdown,
         parse_excel,
     )
+
     EXCEL_AVAILABLE = True
 except ImportError:
     ExcelProcessor = None  # type: ignore[assignment, misc]
@@ -47,6 +49,7 @@ try:
         OptimizedPDFParser,
         parse_pdf_optimized,
     )
+
     AGENTIC_AVAILABLE = True
 except ImportError:
     OptimizedPDFParser = None  # type: ignore[assignment, misc]

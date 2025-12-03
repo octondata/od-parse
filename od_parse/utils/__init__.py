@@ -1,4 +1,5 @@
 """Utility modules for the od-parse library."""
+
 from __future__ import annotations
 
 from od_parse.utils.file_utils import validate_file

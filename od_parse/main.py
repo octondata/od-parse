@@ -4,6 +4,7 @@ OctonData Parse - Main Interface Module
 This module provides an easy-to-use interface to the PDF parsing capabilities
 of the od-parse library, allowing users to extract rich content from documents.
 """
+
 from __future__ import annotations
 
 import argparse

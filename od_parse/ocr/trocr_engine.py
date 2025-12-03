@@ -4,6 +4,7 @@ TrOCR (Transformer-based OCR) Engine.
 This module provides TrOCR integration for superior text recognition,
 with fallback to traditional OCR methods when TrOCR is not available.
 """
+
 from __future__ import annotations
 
 import os

@@ -4,6 +4,7 @@ Configuration settings for od-parse library.
 This module provides functions for loading and accessing configuration settings
 from various sources (environment variables, config files, etc.).
 """
+
 from __future__ import annotations
 
 import json
@@ -18,6 +19,7 @@ YAML_AVAILABLE: bool = False
 
 try:
     import yaml
+
     YAML_AVAILABLE = True
 except ImportError:
     pass

@@ -4,6 +4,7 @@ Multi-Language Processing Module.
 This module provides comprehensive multilingual support for document processing,
 including language detection, text processing, and translation capabilities.
 """
+
 from __future__ import annotations
 
 import os
@@ -86,13 +87,14 @@ class MultilingualProcessor:
 
         # Check googletrans
         try:
-            import googletrans
+            import googletrans  # noqa: F401
 
             self._googletrans_available = True
             self.logger.info("googletrans available for translation")
-        except ImportError:
+        except (ImportError, AttributeError, Exception) as e:
+            # googletrans may fail with AttributeError due to httpcore version conflicts
             self.logger.warning(
-                "googletrans not available. Translation features will be limited."
+                f"googletrans not available. Translation features will be limited. ({e})"
             )
 
     def detect_language(self, text: str, method: str = "auto") -> Dict[str, Any]:

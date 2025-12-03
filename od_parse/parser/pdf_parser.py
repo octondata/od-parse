@@ -1,4 +1,5 @@
 """Core PDF parsing functionality."""
+
 from __future__ import annotations
 
 import logging
@@ -30,6 +31,7 @@ PDFPLUMBER_AVAILABLE: bool = False
 
 try:
     import pdfplumber
+
     PDFPLUMBER_AVAILABLE = True
 except ImportError:
     logger.warning(

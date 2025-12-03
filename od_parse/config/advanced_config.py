@@ -4,6 +4,7 @@ Advanced Configuration System for od-parse.
 This module provides a flexible configuration system that allows users to
 enable/disable advanced features with optional dependencies.
 """
+
 from __future__ import annotations
 
 import json

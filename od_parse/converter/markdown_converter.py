@@ -1,4 +1,5 @@
 """Module for converting parsed PDF content to Markdown format."""
+
 from __future__ import annotations
 
 import json

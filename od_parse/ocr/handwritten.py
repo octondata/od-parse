@@ -1,4 +1,5 @@
 """Module for extracting handwritten content from images using OCR."""
+
 from __future__ import annotations
 
 import os

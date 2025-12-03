@@ -5,6 +5,7 @@ This module provides comprehensive quality assessment metrics for document
 extraction results, helping users understand the reliability and accuracy
 of the parsed content.
 """
+
 from __future__ import annotations
 
 import math

@@ -1,4 +1,5 @@
 """Configuration module for od-parse library."""
+
 from __future__ import annotations
 
 from od_parse.config.advanced_config import (

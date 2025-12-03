@@ -1,4 +1,5 @@
 """Logging utility functions for the od-parse library."""
+
 from __future__ import annotations
 
 import logging

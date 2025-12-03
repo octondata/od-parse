@@ -4,6 +4,7 @@ DuckDB-based Excel processor for efficient Excel file parsing.
 DuckDB provides fast, in-process analytical queries that work excellently
 for processing Excel data, especially for large files.
 """
+
 from __future__ import annotations
 
 import json
@@ -20,12 +21,14 @@ OPENPYXL_AVAILABLE: bool = False
 
 try:
     import duckdb
+
     DUCKDB_AVAILABLE = True
 except ImportError:
     duckdb = None  # type: ignore[assignment]
 
 try:
     import openpyxl  # noqa: F401
+
     OPENPYXL_AVAILABLE = True
 except ImportError:
     pass
@@ -177,9 +180,7 @@ class ExcelProcessor:
         else:
             return self._to_markdown(sheets_data, file_path.name)
 
-    def _load_excel(
-        self, file_path: Path, **kwargs
-    ) -> Dict[str, List[Dict[str, Any]]]:
+    def _load_excel(self, file_path: Path, **kwargs) -> Dict[str, List[Dict[str, Any]]]:
         """
         Load Excel file into DuckDB and extract data.
 
@@ -216,7 +217,8 @@ class ExcelProcessor:
                         # Skip unnamed columns (pandas default "Unnamed: X")
                         if self.config.skip_unnamed_columns:
                             unnamed_cols = [
-                                col for col in result.columns
+                                col
+                                for col in result.columns
                                 if str(col).startswith("Unnamed:")
                             ]
                             if unnamed_cols:
@@ -228,7 +230,8 @@ class ExcelProcessor:
                         # Skip columns where all values are null
                         if self.config.skip_all_null_columns:
                             null_cols = [
-                                col for col in result.columns
+                                col
+                                for col in result.columns
                                 if result[col].isna().all()
                             ]
                             if null_cols:
@@ -432,9 +435,7 @@ class ExcelProcessor:
 
         return "\n".join(markdown)
 
-    def query(
-        self, file_path: Union[str, Path], sql: str
-    ) -> List[Dict[str, Any]]:
+    def query(self, file_path: Union[str, Path], sql: str) -> List[Dict[str, Any]]:
         """
         Run a SQL query on Excel data.
 
@@ -467,9 +468,7 @@ class ExcelProcessor:
             logger.error(f"Query error: {e}")
             raise
 
-    def get_sheet_info(
-        self, file_path: Union[str, Path]
-    ) -> Dict[str, Dict[str, Any]]:
+    def get_sheet_info(self, file_path: Union[str, Path]) -> Dict[str, Dict[str, Any]]:
         """
         Get information about sheets in an Excel file.
 
