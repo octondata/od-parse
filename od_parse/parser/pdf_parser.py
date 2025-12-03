@@ -424,9 +424,9 @@ def extract_text(file_path: Union[str, Path], use_ocr_fallback: bool = True) -> 
                 return ocr_text
             else:
                 logger.warning(f"⚠️  OCR extraction returned no text for {file_path}")
-                logger.warning(f"⚠️  This may be due to missing Tesseract installation")
+                logger.warning("⚠️  This may be due to missing Tesseract installation")
                 logger.warning(
-                    f"⚠️  Install Tesseract: brew install tesseract (macOS) or apt-get install tesseract-ocr (Linux)"
+                    "⚠️  Install Tesseract: brew install tesseract (macOS) or apt-get install tesseract-ocr (Linux)"
                 )
 
         return ""
@@ -653,7 +653,7 @@ def extract_text_with_ocr(file_path: Union[str, Path]) -> str:
 
                 # Use alternative if it's better
                 if len(alt_text.strip()) > len(page_text.strip()):
-                    logger.info(f"✅ Alternative PSM mode produced better results")
+                    logger.info("✅ Alternative PSM mode produced better results")
                     page_text = alt_text
 
             if page_text.strip():
@@ -688,7 +688,7 @@ def extract_text_with_ocr(file_path: Union[str, Path]) -> str:
 
     except ImportError as e:
         logger.error(f"❌ pytesseract not available: {e}")
-        logger.error(f"💡 Install with: pip install pytesseract")
+        logger.error("💡 Install with: pip install pytesseract")
         return ""
     except Exception as e:
         error_msg = str(e)
@@ -696,12 +696,12 @@ def extract_text_with_ocr(file_path: Union[str, Path]) -> str:
             "tesseract is not installed" in error_msg.lower()
             or "not in your path" in error_msg.lower()
         ):
-            logger.error(f"❌ Tesseract OCR is not installed on your system")
-            logger.error(f"💡 Install Tesseract:")
-            logger.error(f"   macOS:   brew install tesseract")
-            logger.error(f"   Ubuntu:  sudo apt-get install tesseract-ocr")
+            logger.error("❌ Tesseract OCR is not installed on your system")
+            logger.error("💡 Install Tesseract:")
+            logger.error("   macOS:   brew install tesseract")
+            logger.error("   Ubuntu:  sudo apt-get install tesseract-ocr")
             logger.error(
-                f"   Windows: Download from https://github.com/UB-Mannheim/tesseract/wiki"
+                "   Windows: Download from https://github.com/UB-Mannheim/tesseract/wiki"
             )
         else:
             logger.error(f"❌ Error during OCR extraction from {file_path}: {e}")
@@ -781,8 +781,8 @@ def extract_tables(file_path: Union[str, Path]) -> List[Dict[str, Any]]:
         List of extracted tables as dictionaries
     """
     if not PDFPLUMBER_AVAILABLE:
-        logger.warning(f"⚠️  pdfplumber not available - skipping table extraction")
-        logger.warning(f"💡 Install with: pip install pdfplumber")
+        logger.warning("⚠️  pdfplumber not available - skipping table extraction")
+        logger.warning("💡 Install with: pip install pdfplumber")
         return []
 
     try:
