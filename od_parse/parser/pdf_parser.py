@@ -759,7 +759,7 @@ def extract_images(
             for j, contour in enumerate(contours):
                 if cv2.contourArea(contour) > 10000:  # Filter small contours
                     x, y, w, h = cv2.boundingRect(contour)
-                    cropped = cv_img[y : y + h, x : x + w]
+                    cropped = cv_img[y:y + h, x:x + w]
                     crop_path = os.path.join(output_dir, f"page_{i+1}_img_{j+1}.png")
                     cv2.imwrite(crop_path, cropped)
                     image_paths.append(crop_path)
