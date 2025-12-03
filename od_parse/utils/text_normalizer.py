@@ -6,10 +6,11 @@ This module provides functions to normalize OCR-extracted text by:
 - Fixing date formatting issues
 - Normalizing document numbers and codes
 - Cleaning up field values
+- Structuring text output for better readability
 """
 
 import re
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 
 
@@ -244,6 +245,157 @@ def normalize_name(text: str) -> Optional[str]:
     normalized = normalized.upper()
 
     return normalized if normalized else None
+
+
+def clean_text_for_json(text: str, preserve_structure: bool = False) -> str:
+    """
+    Clean text for JSON output by removing/replacing problematic characters.
+
+    This function:
+    - Removes excessive newlines
+    - Normalizes whitespace
+    - Optionally preserves paragraph structure
+    - Removes Unicode em-dashes that appear as \u2014
+
+    Args:
+        text: Input text to clean
+        preserve_structure: If True, preserve paragraph breaks; if False, create single line
+
+    Returns:
+        Cleaned text suitable for JSON output
+
+    Examples:
+        >>> text = "line1\\nline2\\n\\nline3"
+        >>> clean_text_for_json(text, preserve_structure=False)
+        "line1 line2 line3"
+
+        >>> clean_text_for_json(text, preserve_structure=True)
+        "line1 line2\\n\\nline3"
+    """
+    if not text:
+        return text
+
+    # Replace Unicode em-dash (\u2014) with regular dash
+    cleaned = text.replace('\u2014', '—')
+
+    # Replace other problematic Unicode characters
+    cleaned = cleaned.replace('\u2013', '–')  # en dash
+    cleaned = cleaned.replace('\u2019', "'")  # right single quote
+    cleaned = cleaned.replace('\u201c', '"')  # left double quote
+    cleaned = cleaned.replace('\u201d', '"')  # right double quote
+    cleaned = cleaned.replace('\u00a0', ' ')  # non-breaking space
+
+    if preserve_structure:
+        # Preserve paragraph breaks (double newlines)
+        # Replace single newlines with spaces
+        # Keep double newlines as paragraph separators
+
+        # First, normalize multiple newlines to double newlines
+        cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+
+        # Split by double newlines (paragraphs)
+        paragraphs = cleaned.split('\n\n')
+
+        # For each paragraph, replace single newlines with spaces
+        cleaned_paragraphs = []
+        for para in paragraphs:
+            # Replace single newlines with spaces
+            para_cleaned = para.replace('\n', ' ')
+            # Normalize multiple spaces to single space
+            para_cleaned = ' '.join(para_cleaned.split())
+            if para_cleaned:
+                cleaned_paragraphs.append(para_cleaned)
+
+        # Join paragraphs with double newlines
+        cleaned = '\n\n'.join(cleaned_paragraphs)
+    else:
+        # Remove all newlines, create single continuous text
+        cleaned = cleaned.replace('\n', ' ')
+        # Normalize multiple spaces to single space
+        cleaned = ' '.join(cleaned.split())
+
+    return cleaned.strip()
+
+
+def structure_form_text(text: str, max_line_length: int = 80) -> str:
+    """
+    Structure form text into readable paragraphs with proper line breaks.
+
+    This function:
+    - Identifies natural paragraph breaks
+    - Wraps long lines at word boundaries
+    - Preserves list structures (lines starting with letters/numbers followed by em-dash)
+
+    Args:
+        text: Input text to structure
+        max_line_length: Maximum characters per line (default: 80)
+
+    Returns:
+        Structured text with proper formatting
+
+    Examples:
+        >>> text = "s—employee salary reduction contributions under a section 408(p) simple plan"
+        >>> structure_form_text(text, max_line_length=50)
+        "s — employee salary reduction contributions\\n    under a section 408(p) simple plan"
+    """
+    if not text:
+        return text
+
+    # First clean the text
+    cleaned = clean_text_for_json(text, preserve_structure=True)
+
+    # Split into paragraphs
+    paragraphs = cleaned.split('\n\n')
+
+    structured_paragraphs = []
+    for para in paragraphs:
+        # Check if this is a list item (starts with letter/number + em-dash)
+        if re.match(r'^[a-z]{1,2}—', para, re.IGNORECASE):
+            # This is a list item, format it specially
+            # Split at the em-dash
+            parts = para.split('—', 1)
+            if len(parts) == 2:
+                prefix = parts[0]
+                content = parts[1].strip()
+
+                # Wrap the content
+                wrapped_lines = []
+                words = content.split()
+                current_line = f"{prefix} — "
+
+                for word in words:
+                    if len(current_line) + len(word) + 1 <= max_line_length:
+                        current_line += word + ' '
+                    else:
+                        wrapped_lines.append(current_line.rstrip())
+                        current_line = '    ' + word + ' '  # Indent continuation
+
+                if current_line.strip():
+                    wrapped_lines.append(current_line.rstrip())
+
+                structured_paragraphs.append('\n'.join(wrapped_lines))
+            else:
+                structured_paragraphs.append(para)
+        else:
+            # Regular paragraph, just wrap it
+            words = para.split()
+            wrapped_lines = []
+            current_line = ''
+
+            for word in words:
+                if len(current_line) + len(word) + 1 <= max_line_length:
+                    current_line += word + ' '
+                else:
+                    if current_line:
+                        wrapped_lines.append(current_line.rstrip())
+                    current_line = word + ' '
+
+            if current_line.strip():
+                wrapped_lines.append(current_line.rstrip())
+
+            structured_paragraphs.append('\n'.join(wrapped_lines))
+
+    return '\n\n'.join(structured_paragraphs)
 
 
 def normalize_i94_fields(extracted_data: Dict[str, Any]) -> Dict[str, Any]:
