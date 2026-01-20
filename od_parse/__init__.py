@@ -2,6 +2,7 @@
 od-parse: AI-powered library for parsing complex PDFs with intelligent optimization.
 
 Features:
+- LLM-powered document understanding (OpenAI, Anthropic, Google)
 - Intelligent document analysis with AI agents
 - Smart caching (10-100x faster for repeated documents)
 - Parallel processing (3-5x faster)
@@ -15,7 +16,12 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from od_parse.converter import convert_to_markdown
-from od_parse.parser import parse_pdf
+
+# Import the LLM-enhanced parse_pdf from main module (NOT the basic parser)
+from od_parse.main import parse_pdf
+
+# Also expose the basic parser for users who don't need LLM
+from od_parse.parser import parse_pdf as parse_pdf_basic
 
 # Optional: Excel processing with DuckDB
 EXCEL_AVAILABLE: bool = False
@@ -62,8 +68,9 @@ except ImportError:
 __version__ = "0.2.0"
 
 __all__ = [
-    # Core functions
-    "parse_pdf",
+    # Core functions (LLM-enhanced)
+    "parse_pdf",  # Full LLM-powered parsing with require_llm option
+    "parse_pdf_basic",  # Basic parsing without LLM (faster, no API keys needed)
     "convert_to_markdown",
     # Excel processing (DuckDB)
     "ExcelProcessor",
