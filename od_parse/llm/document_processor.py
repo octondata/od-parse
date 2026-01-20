@@ -44,7 +44,9 @@ class LLMDocumentProcessor:
         self.logger = get_logger(__name__)
         self.llm_config = get_llm_config()
         self.model_id = model_id
-        self._user_specified_model = model_id is not None  # Track if user explicitly chose a model
+        self._user_specified_model = (
+            model_id is not None
+        )  # Track if user explicitly chose a model
         self.custom_config = custom_config or {}
 
         # Initialize document classifier for intelligent routing

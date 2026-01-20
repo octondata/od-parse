@@ -342,9 +342,7 @@ def _enhance_with_llm_processing(
 
     except ImportError as e:
         logger.error(f"❌ LLM processing dependencies not available: {e}")
-        logger.error(
-            "   Install with: pip install openai anthropic google-genai"
-        )
+        logger.error("   Install with: pip install openai anthropic google-genai")
         logger.info("Falling back to traditional advanced features")
         return _enhance_with_advanced_features(parsed_data, file_path, "default")
     except ValueError as e:
