@@ -58,9 +58,9 @@ class TestTrOCREngine(unittest.TestCase):
             engine = TrOCREngine()
             result = engine.extract_text(self.test_image)
             
-            # Should use fallback engine
+            # Should use fallback engine (tesseract, vlm, none, or error)
             self.assertIn("engine", result)
-            self.assertIn(result["engine"], ["tesseract", "none", "error"])
+            self.assertIn(result["engine"], ["tesseract", "vlm", "none", "error"])
             
         except ImportError:
             self.skipTest("TrOCR dependencies not available")

@@ -2,11 +2,14 @@
 TrOCR (Transformer-based OCR) Engine.
 
 This module provides TrOCR integration for superior text recognition,
-with fallback to traditional OCR methods when TrOCR is not available.
+with fallback to traditional OCR methods when TrOCR is not available,
+and Vision LLM fallback for difficult low-quality images.
 """
 
 from __future__ import annotations
 
+import base64
+import io
 import os
 import warnings
 from pathlib import Path
@@ -20,6 +23,15 @@ from od_parse.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
 
+# VLM availability
+VLM_AVAILABLE = False
+try:
+    from google import genai
+
+    VLM_AVAILABLE = True
+except ImportError:
+    pass
+
 
 class TrOCREngine:
     """
@@ -27,11 +39,17 @@ class TrOCREngine:
 
     This class provides advanced text recognition using Microsoft's TrOCR
     (Transformer-based OCR) models, with automatic fallback to Tesseract
-    when TrOCR dependencies are not available.
+    when TrOCR dependencies are not available, and Vision LLM fallback
+    for difficult low-quality images.
     """
 
     def __init__(
-        self, model_name: str = "microsoft/trocr-base-printed", device: str = "auto"
+        self,
+        model_name: str = "microsoft/trocr-base-printed",
+        device: str = "auto",
+        enable_vlm_fallback: bool = True,
+        vlm_confidence_threshold: float = 0.3,
+        vlm_model: str = "gemini-2.0-flash",
     ):
         """
         Initialize the TrOCR engine.
@@ -43,6 +61,9 @@ class TrOCREngine:
                 - microsoft/trocr-large-printed
                 - microsoft/trocr-large-handwritten
             device: Device to run inference on ('cpu', 'cuda', 'auto')
+            enable_vlm_fallback: Whether to use Vision LLM for difficult images
+            vlm_confidence_threshold: Confidence below which to trigger VLM
+            vlm_model: Vision LLM model to use (e.g., 'gemini-2.0-flash')
         """
         self.logger = get_logger(__name__)
         self.model_name = model_name
@@ -51,6 +72,12 @@ class TrOCREngine:
         self.model = None
         self._is_available = False
         self._fallback_engine = None
+
+        # VLM fallback settings
+        self.enable_vlm_fallback = enable_vlm_fallback
+        self.vlm_confidence_threshold = vlm_confidence_threshold
+        self.vlm_model = vlm_model
+        self._vlm_client = None
 
         # Check if TrOCR is available and initialize
         self._initialize_trocr()
@@ -112,6 +139,24 @@ class TrOCREngine:
         except ImportError:
             self.logger.error("Neither TrOCR nor Tesseract is available")
 
+    def _initialize_vlm(self) -> bool:
+        """Initialize Vision LLM client for fallback."""
+        if not VLM_AVAILABLE:
+            return False
+
+        api_key = os.environ.get("GOOGLE_API_KEY")
+        if not api_key:
+            self.logger.warning("GOOGLE_API_KEY not set, VLM fallback disabled")
+            return False
+
+        try:
+            self._vlm_client = genai.Client(api_key=api_key)
+            self.logger.info(f"Initialized VLM fallback with model: {self.vlm_model}")
+            return True
+        except Exception as e:
+            self.logger.warning(f"Failed to initialize VLM: {e}")
+            return False
+
     def extract_text(
         self, image: Union[str, Path, Image.Image, np.ndarray], **kwargs
     ) -> Dict[str, Any]:
@@ -129,10 +174,30 @@ class TrOCREngine:
             # Convert input to PIL Image
             pil_image = self._prepare_image(image)
 
+            # Try primary engine
             if self._is_available:
-                return self._extract_with_trocr(pil_image, **kwargs)
+                result = self._extract_with_trocr(pil_image, **kwargs)
             else:
-                return self._extract_with_fallback(pil_image, **kwargs)
+                result = self._extract_with_fallback(pil_image, **kwargs)
+
+            # Check if we should try VLM fallback
+            if (
+                self.enable_vlm_fallback
+                and result.get("confidence", 0) < self.vlm_confidence_threshold
+                and VLM_AVAILABLE
+            ):
+                self.logger.info(
+                    f"Low confidence ({result.get('confidence', 0):.2f}), "
+                    f"trying VLM fallback"
+                )
+                vlm_result = self._extract_with_vlm(pil_image, **kwargs)
+                if vlm_result and vlm_result.get("confidence", 0) > result.get(
+                    "confidence", 0
+                ):
+                    vlm_result["traditional_result"] = result
+                    return vlm_result
+
+            return result
 
         except Exception as e:
             self.logger.error(f"Error extracting text: {e}")
@@ -231,6 +296,98 @@ class TrOCREngine:
                 "error": str(e),
             }
 
+    def _extract_with_vlm(
+        self, image: Image.Image, **kwargs
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Extract text using Vision LLM.
+
+        This method uses Google Gemini Vision or similar VLMs for
+        high-quality OCR on difficult images.
+        """
+        if not VLM_AVAILABLE:
+            return None
+
+        # Initialize VLM client if needed
+        if self._vlm_client is None:
+            if not self._initialize_vlm():
+                return None
+
+        try:
+            # Convert PIL Image to bytes
+            img_byte_arr = io.BytesIO()
+            image.save(img_byte_arr, format="PNG")
+            img_bytes = img_byte_arr.getvalue()
+
+            # Create prompt for OCR
+            prompt = """You are an OCR engine. Extract ALL text from this image exactly as it appears.
+
+Rules:
+1. Preserve the original layout and structure as much as possible
+2. Include all text, numbers, and symbols
+3. Maintain line breaks where they appear in the image
+4. If text is unclear, make your best guess with [unclear] marker
+5. Return ONLY the extracted text, no explanations
+
+Extract the text now:"""
+
+            # Call Gemini Vision
+            response = self._vlm_client.models.generate_content(
+                model=self.vlm_model,
+                contents=[
+                    {
+                        "parts": [
+                            {"text": prompt},
+                            {
+                                "inline_data": {
+                                    "mime_type": "image/png",
+                                    "data": base64.b64encode(img_bytes).decode("utf-8"),
+                                }
+                            },
+                        ]
+                    }
+                ],
+            )
+
+            extracted_text = response.text.strip()
+
+            # Estimate confidence based on response quality
+            confidence = self._estimate_vlm_confidence(extracted_text)
+
+            return {
+                "text": extracted_text,
+                "confidence": confidence,
+                "engine": "vlm",
+                "model": self.vlm_model,
+            }
+
+        except Exception as e:
+            self.logger.error(f"VLM extraction failed: {e}")
+            return None
+
+    def _estimate_vlm_confidence(self, text: str) -> float:
+        """Estimate confidence for VLM-extracted text."""
+        if not text or not text.strip():
+            return 0.0
+
+        score = 0.85  # Base confidence for VLM
+
+        # Check for uncertainty markers
+        if "[unclear]" in text.lower():
+            unclear_count = text.lower().count("[unclear]")
+            score -= 0.1 * min(unclear_count, 3)
+
+        # Check text length (very short might indicate issues)
+        if len(text.strip()) < 10:
+            score *= 0.8
+
+        # Check for reasonable character distribution
+        alpha_ratio = sum(c.isalpha() for c in text) / len(text) if text else 0
+        if alpha_ratio < 0.2:
+            score *= 0.9
+
+        return max(0.1, min(score, 1.0))
+
     def _estimate_confidence(self, text: str) -> float:
         """
         Estimate confidence score for TrOCR output.
@@ -307,6 +464,10 @@ class TrOCREngine:
             "device": self.device if self._is_available else None,
             "fallback_available": self._fallback_engine is not None,
             "current_engine": "trocr" if self._is_available else "tesseract",
+            "vlm_fallback_enabled": self.enable_vlm_fallback,
+            "vlm_available": VLM_AVAILABLE,
+            "vlm_model": self.vlm_model if self.enable_vlm_fallback else None,
+            "vlm_confidence_threshold": self.vlm_confidence_threshold,
         }
 
 
