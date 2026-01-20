@@ -121,7 +121,8 @@ class VLMProcessor:
 
         elif self.model.startswith("gemini"):
             try:
-                import google.generativeai as genai
+                # Try new google-genai package first
+                from google import genai
 
                 if not self.api_key:
                     self.logger.warning(
@@ -129,12 +130,11 @@ class VLMProcessor:
                     )
                     return
 
-                genai.configure(api_key=self.api_key)
-                self.client = genai
+                self.client = genai.Client(api_key=self.api_key)
                 self.logger.info(f"Initialized VLM model: {self.model}")
             except ImportError:
                 self.logger.error(
-                    "Google GenerativeAI package not installed. Please install it with: pip install google-generativeai"
+                    "Google GenAI package not installed. Please install it with: pip install google-genai"
                 )
 
         else:
@@ -274,10 +274,12 @@ class VLMProcessor:
     def _process_with_gemini(self, image: Image.Image, prompt: str) -> Dict[str, Any]:
         """Process the document image with Gemini VLM."""
         try:
-            model = self.client.GenerativeModel(self.model)
-            response = model.generate_content(
-                [prompt, image],
-                generation_config=self.client.GenerationConfig(
+            from google.genai import types
+
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=[prompt, image],
+                config=types.GenerateContentConfig(
                     temperature=self.temperature, max_output_tokens=self.max_tokens
                 ),
             )

@@ -142,7 +142,7 @@ python3 -m pip install -e .
 Install core dependencies manually if needed:
 
 ```bash
-pip install pdfminer.six tabula-py opencv-python pillow pytesseract pandas numpy openai anthropic google-generativeai pdf2image
+pip install pdfminer.six tabula-py opencv-python pillow pytesseract pandas numpy openai anthropic google-genai pdf2image
 ```
 
 > **🤖 LLM-First Approach:** od-parse now requires LLM API keys for advanced document understanding. Local processing is available for basic extraction only.
@@ -810,7 +810,7 @@ These are lightweight and installed automatically:
 - opencv-python - Image processing
 - tabula-py, pdfplumber - Table extraction
 - numpy, pandas - Data processing
-- openai, anthropic, google-generativeai - LLM APIs
+- openai, anthropic, google-genai - LLM APIs
 
 ### Excel Processing (Optional)
 ```bash

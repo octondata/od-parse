@@ -35,7 +35,7 @@ from od_parse.utils.logging_utils import configure_logging, get_logger
 
 def parse_pdf(
     file_path: Union[str, Path],
-    output_format: str = "raw",
+    output_format: str = "full",
     output_file: Optional[str] = None,
     pipeline_type: str = "default",
     use_deep_learning: bool = True,
@@ -46,6 +46,19 @@ def parse_pdf(
     """
     Parse a PDF file using LLM-powered advanced document understanding.
     Orchestrates the parsing pipeline by calling a series of helper functions.
+
+    Args:
+        file_path: Path to PDF file
+        output_format: "full" (default), "markdown", or "embeddings"
+        output_file: Optional path to write output
+        pipeline_type: Processing pipeline type
+        use_deep_learning: Enable deep learning features
+        llm_model: Specific LLM model to use (auto-selects if None)
+        require_llm: Require LLM processing (raises error if unavailable)
+        for_embeddings: Optimize output for vector embeddings
+
+    Returns:
+        Dictionary with parsed_data, metadata, summary, and optionally llm_analysis
     """
     start_time = time.time()
 
@@ -191,7 +204,7 @@ def _handle_output(result, output_format, output_file, for_embeddings):
                 f"Error details have been logged.\n\n{error_details}"
             )
 
-    if for_embeddings or output_format == "raw":
+    if for_embeddings or output_format == "embeddings":
         result = _optimize_for_embeddings(result)
 
     if output_file:
@@ -328,11 +341,22 @@ def _enhance_with_llm_processing(
         return enhanced_data
 
     except ImportError as e:
-        logger.error(f"LLM processing dependencies not available: {e}")
+        logger.error(f"❌ LLM processing dependencies not available: {e}")
+        logger.error(
+            "   Install with: pip install openai anthropic google-genai"
+        )
+        logger.info("Falling back to traditional advanced features")
+        return _enhance_with_advanced_features(parsed_data, file_path, "default")
+    except ValueError as e:
+        # This is raised when no API keys are found
+        logger.error(f"❌ LLM configuration error: {e}")
         logger.info("Falling back to traditional advanced features")
         return _enhance_with_advanced_features(parsed_data, file_path, "default")
     except Exception as e:
-        logger.error(f"LLM processing failed: {e}")
+        logger.error(f"❌ LLM processing failed: {e}")
+        import traceback
+
+        logger.debug(f"   Traceback: {traceback.format_exc()}")
         logger.info("Falling back to traditional advanced features")
         return _enhance_with_advanced_features(parsed_data, file_path, "default")
 

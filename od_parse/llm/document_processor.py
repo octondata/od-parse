@@ -44,6 +44,7 @@ class LLMDocumentProcessor:
         self.logger = get_logger(__name__)
         self.llm_config = get_llm_config()
         self.model_id = model_id
+        self._user_specified_model = model_id is not None  # Track if user explicitly chose a model
         self.custom_config = custom_config or {}
 
         # Initialize document classifier for intelligent routing
@@ -100,13 +101,14 @@ class LLMDocumentProcessor:
 
             self.logger.info(f"Processing {doc_type} document with LLM")
 
-            # Step 2: Select optimal model for document type
-            optimal_model = self.llm_config.get_recommended_model(doc_type)
-            if optimal_model and optimal_model != self.model_id:
-                self.logger.info(
-                    f"Switching to optimal model for {doc_type}: {optimal_model}"
-                )
-                self.model_id = optimal_model
+            # Step 2: Select optimal model for document type (only if user didn't specify one)
+            if not self._user_specified_model:
+                optimal_model = self.llm_config.get_recommended_model(doc_type)
+                if optimal_model and optimal_model != self.model_id:
+                    self.logger.info(
+                        f"Switching to optimal model for {doc_type}: {optimal_model}"
+                    )
+                    self.model_id = optimal_model
 
             # Step 3: Get document-specific system prompt
             system_prompt = self.llm_config.get_system_prompt(doc_type)
@@ -202,7 +204,7 @@ class LLMDocumentProcessor:
                 "content": [
                     {
                         "type": "text",
-                        "text": f"Please analyze this {doc_type} document and extract structured information:\n\n{text_content[:10000]}",  # Limit text length
+                        "text": f"Please analyze this {doc_type} document and extract structured information. Return your response as valid JSON.\n\n{text_content[:10000]}",  # Limit text length
                     }
                 ],
             }
@@ -351,34 +353,66 @@ class LLMDocumentProcessor:
     ) -> Dict[str, Any]:
         """Process with Google Gemini models."""
         try:
-            import google.generativeai as genai
-            import os
+            # Try new google-genai package first, fall back to deprecated one
+            try:
+                from google import genai
+                from google.genai import types
 
-            model_config = self.llm_config.models[self.model_id]
-            genai.configure(api_key=os.getenv(model_config.api_key_env))
+                model_config = self.llm_config.models[self.model_id]
+                client = genai.Client(api_key=os.getenv(model_config.api_key_env))
 
-            model = genai.GenerativeModel(model_config.model_name)
+                # Prepare content parts
+                content_parts = [
+                    f"{system_prompt}\n\nPlease analyze this {doc_type} document and extract structured information in JSON format:\n\n{parsed_data.get('text', '')[:10000]}"
+                ]
 
-            # Prepare content
-            content = [
-                f"{system_prompt}\n\nPlease analyze this {doc_type} document and extract structured information in JSON format:\n\n{parsed_data.get('text', '')[:10000]}"
-            ]
+                # Add images if available and model supports vision
+                if document_images and model_config.supports_vision:
+                    for img in document_images[:3]:  # First 3 pages
+                        content_parts.append(img)
 
-            # Add images if available and model supports vision
-            if document_images and model_config.supports_vision:
-                content.extend(document_images[:3])  # Add first 3 pages
+                # Make API call with new SDK
+                response = client.models.generate_content(
+                    model=model_config.model_name,
+                    contents=content_parts,
+                    config=types.GenerateContentConfig(
+                        max_output_tokens=model_config.max_tokens,
+                        temperature=model_config.temperature,
+                    ),
+                )
 
-            # Make API call
-            response = model.generate_content(
-                content,
-                generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=model_config.max_tokens,
-                    temperature=model_config.temperature,
-                ),
-            )
+                response_text = response.text
+
+            except ImportError:
+                # Fall back to deprecated package
+                import google.generativeai as genai
+
+                model_config = self.llm_config.models[self.model_id]
+                genai.configure(api_key=os.getenv(model_config.api_key_env))
+
+                model = genai.GenerativeModel(model_config.model_name)
+
+                # Prepare content
+                content = [
+                    f"{system_prompt}\n\nPlease analyze this {doc_type} document and extract structured information in JSON format:\n\n{parsed_data.get('text', '')[:10000]}"
+                ]
+
+                # Add images if available and model supports vision
+                if document_images and model_config.supports_vision:
+                    content.extend(document_images[:3])  # Add first 3 pages
+
+                # Make API call
+                response = model.generate_content(
+                    content,
+                    generation_config=genai.types.GenerationConfig(
+                        max_output_tokens=model_config.max_tokens,
+                        temperature=model_config.temperature,
+                    ),
+                )
+
+                response_text = response.text
 
             # Parse response
-            response_text = response.text
             try:
                 result = json.loads(response_text)
             except json.JSONDecodeError:

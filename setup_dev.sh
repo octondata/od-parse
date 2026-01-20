@@ -47,7 +47,7 @@ pip install pdfminer.six tabula-py opencv-python pillow pytesseract pandas numpy
 
 # Install LLM dependencies
 echo "🤖 Installing LLM dependencies..."
-pip install openai anthropic google-generativeai pdf2image
+pip install openai anthropic google-genai pdf2image
 
 # Install od-parse in development mode
 echo "🔨 Installing od-parse in development mode..."

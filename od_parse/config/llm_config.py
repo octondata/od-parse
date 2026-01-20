@@ -147,26 +147,27 @@ class LLMConfig:
                     DocumentComplexity.MODERATE,
                 ],
             ),
-            # Google Models
-            "gemini-1.5-pro": LLMModelConfig(
+            # Google Models (Gemini 2.x - 2025)
+            "gemini-2.0-flash": LLMModelConfig(
                 provider=LLMProvider.GOOGLE,
-                model_name="gemini-1.5-pro",
+                model_name="gemini-2.0-flash",
                 api_key_env="GOOGLE_API_KEY",
-                max_tokens=4096,
+                max_tokens=8192,
                 temperature=0.1,
                 supports_vision=True,
-                cost_per_1k_tokens=0.0035,
+                cost_per_1k_tokens=0.0001,
                 context_window=1000000,
                 recommended_complexity=[
+                    DocumentComplexity.SIMPLE,
+                    DocumentComplexity.MODERATE,
                     DocumentComplexity.COMPLEX,
-                    DocumentComplexity.EXPERT,
                 ],
             ),
-            "gemini-1.5-flash": LLMModelConfig(
+            "gemini-2.5-flash": LLMModelConfig(
                 provider=LLMProvider.GOOGLE,
-                model_name="gemini-1.5-flash",
+                model_name="gemini-2.5-flash",
                 api_key_env="GOOGLE_API_KEY",
-                max_tokens=4096,
+                max_tokens=8192,
                 temperature=0.1,
                 supports_vision=True,
                 cost_per_1k_tokens=0.00015,
@@ -174,6 +175,20 @@ class LLMConfig:
                 recommended_complexity=[
                     DocumentComplexity.SIMPLE,
                     DocumentComplexity.MODERATE,
+                ],
+            ),
+            "gemini-2.5-pro": LLMModelConfig(
+                provider=LLMProvider.GOOGLE,
+                model_name="gemini-2.5-pro",
+                api_key_env="GOOGLE_API_KEY",
+                max_tokens=8192,
+                temperature=0.1,
+                supports_vision=True,
+                cost_per_1k_tokens=0.0035,
+                context_window=1000000,
+                recommended_complexity=[
+                    DocumentComplexity.COMPLEX,
+                    DocumentComplexity.EXPERT,
                 ],
             ),
             # Azure OpenAI
