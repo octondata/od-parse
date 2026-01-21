@@ -89,11 +89,15 @@ class TestImageQualityAssessment(unittest.TestCase):
         img[:] = 200
 
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-            cv2.imwrite(f.name, img)
-            quality = assess_image_quality(f.name)
-            os.unlink(f.name)
+            temp_path = f.name
 
-        self.assertIsInstance(quality, QualityScore)
+        # Write image after closing file handle (Windows compatibility)
+        cv2.imwrite(temp_path, img)
+        try:
+            quality = assess_image_quality(temp_path)
+            self.assertIsInstance(quality, QualityScore)
+        finally:
+            os.unlink(temp_path)
 
 
 class TestImageEnhancer(unittest.TestCase):
@@ -166,11 +170,15 @@ class TestImageEnhancer(unittest.TestCase):
     def test_enhance_from_file_path(self):
         """Test enhancement from file path."""
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-            cv2.imwrite(f.name, self.test_image)
-            enhanced, metadata = self.enhancer.enhance(f.name)
-            os.unlink(f.name)
+            temp_path = f.name
 
-        self.assertIsInstance(enhanced, np.ndarray)
+        # Write image after closing file handle (Windows compatibility)
+        cv2.imwrite(temp_path, self.test_image)
+        try:
+            enhanced, metadata = self.enhancer.enhance(temp_path)
+            self.assertIsInstance(enhanced, np.ndarray)
+        finally:
+            os.unlink(temp_path)
 
     def test_enhancement_config_defaults(self):
         """Test EnhancementConfig default values."""

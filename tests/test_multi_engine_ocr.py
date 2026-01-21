@@ -132,11 +132,15 @@ class TestTesseractEngine(unittest.TestCase):
     def test_extract_text_from_file(self):
         """Test extraction from file path."""
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-            cv2.imwrite(f.name, self.test_image)
-            result = self.engine.extract_text(f.name)
-            os.unlink(f.name)
+            temp_path = f.name
 
-        self.assertIsInstance(result, OCRResult)
+        # Write image after closing file handle (Windows compatibility)
+        cv2.imwrite(temp_path, self.test_image)
+        try:
+            result = self.engine.extract_text(temp_path)
+            self.assertIsInstance(result, OCRResult)
+        finally:
+            os.unlink(temp_path)
 
     def test_unavailable_engine_error(self):
         """Test behavior when engine is not available."""
@@ -349,24 +353,30 @@ class TestImageInputFormats(unittest.TestCase):
     def test_file_path_input(self):
         """Test extraction from file path."""
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-            cv2.imwrite(f.name, self.np_image)
+            temp_path = f.name
 
+        # Write image after closing file handle (Windows compatibility)
+        cv2.imwrite(temp_path, self.np_image)
+        try:
             if self.processor.available_engines:
-                result = self.processor.extract_text(f.name)
+                result = self.processor.extract_text(temp_path)
                 self.assertIsInstance(result, OCRResult)
-
-            os.unlink(f.name)
+        finally:
+            os.unlink(temp_path)
 
     def test_path_object_input(self):
         """Test extraction from Path object."""
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-            cv2.imwrite(f.name, self.np_image)
+            temp_path = f.name
 
+        # Write image after closing file handle (Windows compatibility)
+        cv2.imwrite(temp_path, self.np_image)
+        try:
             if self.processor.available_engines:
-                result = self.processor.extract_text(Path(f.name))
+                result = self.processor.extract_text(Path(temp_path))
                 self.assertIsInstance(result, OCRResult)
-
-            os.unlink(f.name)
+        finally:
+            os.unlink(temp_path)
 
 
 if __name__ == "__main__":
