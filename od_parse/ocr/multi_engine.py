@@ -461,7 +461,7 @@ class MultiEngineOCR:
         enable_enhancement: bool = True,
         enhancement_config: Optional[EnhancementConfig] = None,
         vlm_fallback: bool = True,
-        vlm_confidence_threshold: float = 0.3,
+        vlm_confidence_threshold: float = 0.7,  # Raised from 0.3 to 0.7
     ):
         """
         Initialize multi-engine OCR.

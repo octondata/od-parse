@@ -48,7 +48,7 @@ class TrOCREngine:
         model_name: str = "microsoft/trocr-base-printed",
         device: str = "auto",
         enable_vlm_fallback: bool = True,
-        vlm_confidence_threshold: float = 0.3,
+        vlm_confidence_threshold: float = 0.7,  # Raised from 0.3 to 0.7
         vlm_model: str = "gemini-2.0-flash",
     ):
         """
