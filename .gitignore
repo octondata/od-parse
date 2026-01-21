@@ -65,6 +65,9 @@ gemini_processing_results/
 !package.json
 !requirements.json
 
+# Test output files
+tests/test_output/*.md
+
 # Temporary files
 temp/
 tmp/
